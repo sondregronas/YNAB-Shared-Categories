@@ -83,6 +83,12 @@ def YNAB_ParseCache(param):
     with open(path) as f:
         data = json.load(f)
     return data
+
+# Remove key from dictionary
+def removekey(d, key):
+    r = dict(d)
+    del r[key]
+    return r
     
 # Returns All Account Info matching the Account Note Modifier. Takes the ID String & JSON in /budgets/-ID/
 def findAccountByNote(note, json): # FINISHED
@@ -199,32 +205,81 @@ def UpdateJointCategories(json, AllDeltaAccounts):
     print 'All Joint Category IDs grabbed.'
     return data
 
-def sendDelta (transactiondata):
-    print 'Sending delta'
-    # missing
+####################################################
+####################################################
 
-def sendTransaction (transactiondata):
-    print 'Sending transaction'
-    # missing
-    # 
-    #
+## TO-DO
+## Send the transaction to the server
+def sendDelta (transactiondata, targetbudget):
+    print 'Sending Delta to server'
+    #print transactiondata, targetbudget
+    # send transactiondata to 'targetbudget / transactions'
 
+## TO-DO
+## Send the transaction to the server
+def sendTransaction (transactiondata, targetbudget):
+    print 'Sending transaction to server'
+    #print transactiondata, targetbudget
+    # send transactiondata to 'targetbudget / transactions'
+
+####################################################
+####################################################
+
+# Missing Category ID = To Be Budgeted
+# Other than that I believe it is completed, unless payeeid or transactionid is required
+# parseDeltas prepares the delta transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseDeltas(transaction):
     for delta in AllDeltaAccounts:
-                deltaamount = -1*(transaction['amount']/len(AllDeltaAccounts))
-                print 'Sending Deltas to: ' + delta['name']
-                print str(deltaamount) + ' is Delta, total amount: ' + str(transaction['amount'])
+        # Variables of necessary data
+        targetaccount = delta['id']
+        targetaccountname = delta['name']
+        targetcategoryid = '' # Not sure what the easiest way to retrieve this is, or if this is necessary
+        targetcategoryname = 'To be Budgeted'
+        targetbudget = delta['budget_id']
+        targetpayeeid = '' # Not sure if this is needed
+        transactionid = '' # Not sure if this is needed?
 
-                # Get the transactiondata from dict(transaction) and dict(delta)
+        deltaamount = -1*(transaction['amount']/len(AllDeltaAccounts))
 
-                #transactionData = [{}]
-                #sendDelta(transactionData)
+        # Remove 'note', 'budget_id', 'budget_name'. - These were only needed for budget verification and not part of the transactions originally.
+        transactiondata = removekey(transaction, 'note') 
+        transactiondata = removekey(transactiondata, 'budget_id')
+        transactiondata = removekey(transactiondata, 'budget_name')
 
+        # Update category & Account
+        transactiondata = removekey(transactiondata, 'category_id')
+        transactiondata = removekey(transactiondata, 'category_name')
+        transactiondata = removekey(transactiondata, 'account_id')
+        transactiondata = removekey(transactiondata, 'account_name')
+        transactiondata = removekey(transactiondata, 'payee_id')
+        transactiondata = removekey(transactiondata, 'id')
+        transactiondata = removekey(transactiondata, 'amount')
+
+        transactiondata.update({'category_id':targetcategoryid, 
+                                'category_name':targetcategoryname, 
+                                'account_id':targetaccount, 
+                                'account_name':targetaccountname,
+                                'payee_id':targetpayeeid,
+                                'id':transactionid,
+                                'amount':deltaamount})
+        
+        #Debug message
+        print 'Sending Delta to: ' + delta['name']
+        print str(deltaamount) + ' is Delta, total amount: ' + str(transaction['amount'])
+        sendDelta(transactiondata, targetbudget)
+
+
+# This should be complete AFAIK - Except it doesn't handle deleted or edited transactions. 
+# It doesn't include deleted transactions however, edited transactions are treated as new transactions.
+# Don't know if 'subtransactions' work either, but idk if it's necessary
+# targetpayeeid and transactionid Might be needed - I don't know?
+# parseTransactions prepares the main transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseTransactions(jointTransactions):
     # Check all Transactions
     for tr in jointTransactions:
         # Make sure transactions are new, and not deleted
         if not tr['deleted']:
+            # Sends transaction data to parseDeltas
             parseDeltas(tr)
             print 'Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']
             # Get the receivers of the new transaction
@@ -232,11 +287,41 @@ def parseTransactions(jointTransactions):
                 for categories in AllJointCategories:
                     if tr['note'] == categories['note'] and tr['category_id'] != categories['id']:
                         if categories['budget_id'] == budgets['budget_id']:
+                            # Debug message
                             print 'Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name'] + '. ID: ' + budgets['budget_id']
 
-                            # Get the transactionData from dict(tr), dict(categories)
-                            #transactionData = [{}]
-                            #sendTransaction(transactionData)
+                            # Variables of necessary data
+                            for delta in AllDeltaAccounts:
+                                if budgets['budget_id'] == delta['budget_id']:
+                                    targetaccount = delta['id']
+                                    targetaccountname = delta['name']
+                            targetcategoryid = categories['id']
+                            targetcategoryname = categories['name']
+                            targetbudget = budgets['budget_id']
+                            targetpayeeid = '' # Not sure if this is needed?
+                            transactionid = '' # Not sure if this is needed?
+
+                            # Remove 'note', 'budget_id', 'budget_name'. - These were only needed for budget verification and not part of the transactions originally.
+                            transactiondata = removekey(tr, 'note') 
+                            transactiondata = removekey(transactiondata, 'budget_id')
+                            transactiondata = removekey(transactiondata, 'budget_name')
+
+                            # Update category & Account
+                            transactiondata = removekey(transactiondata, 'category_id')
+                            transactiondata = removekey(transactiondata, 'category_name')
+                            transactiondata = removekey(transactiondata, 'account_id')
+                            transactiondata = removekey(transactiondata, 'account_name')
+                            transactiondata = removekey(transactiondata, 'payee_id')
+                            transactiondata = removekey(transactiondata, 'id')
+
+                            transactiondata.update({'category_id':targetcategoryid, 
+                                                    'category_name':targetcategoryname, 
+                                                    'account_id':targetaccount, 
+                                                    'account_name':targetaccountname, 
+                                                    'payee_id':targetpayeeid,
+                                                    'id':transactionid})
+
+                            sendTransaction(transactiondata, targetbudget)
 
 def main():
 
@@ -252,7 +337,7 @@ def main():
     for item in AllDeltaAccounts:
         print 'Checking new transactions in account: ' + item['budget_name'] + '. ID: ' + item['budget_id']
         jointTransactions = getNewJointTransactions(AllJointCategories, AllDeltaAccounts, item['budget_id'])
-        print 'Succesful recent transactions:'
+        #print 'Succesful recent transactions:'
         parseTransactions(jointTransactions)
     # End Loop
 
