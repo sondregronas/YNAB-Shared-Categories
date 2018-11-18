@@ -351,7 +351,7 @@ if os.path.isfile('conf.txt') == False:
     with open('conf.txt', 'w') as f:
         f.write('You can edit the modifier to whatever you would like.\n')
         f.write('Do not include any spaces or additional information in your notes on YNAB. Do not remove quotation marks\n')
-        f.write('VALUES:')
+        f.write('VALUES:\n')
         f.write('Create a Delta account and put this in the Account Notes: "Joint_Delta"\n')
         f.write('DeltaCategoryNoteModifier: "Joint_ID:"')
 with open('conf.txt', 'r') as f:
