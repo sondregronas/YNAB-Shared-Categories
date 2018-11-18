@@ -1,7 +1,7 @@
 # YNAB-Shared-Categories
 Currently in progress!
 
-To use this application, run the script once, and edit the key.txt with your own API-Key from https://app.youneedabudget.com/settings/developer
+To use this application, run the script once, and edit the key.txt with your own access token from https://app.youneedabudget.com/settings/developer
 
 In the budgets you wish to share categories with, create a checking account and name it Delta. 
 Add "Joint_Delta" to the Notes of this account. Do this for every applicable budget.
