@@ -6,7 +6,7 @@ To use this application, run the script once, and edit the key.txt with your own
 In the budgets you wish to share categories with, create a checking account and name it Delta. 
 Add "Joint_Delta" to the Notes of this account. Do this for every applicable budget.
 
-In the categories you wish to share, add "Joint_ID:XXX" (where XXX is a number like 001) to the note of the category,
+In the categories you wish to share, add "Joint_ID:XXX" (Do not add anything else at the moment this is not supported, where XXX is a number like 001) to the note of the category,
 do for all applicable categories. Again do this for all applicable budgets.
 Make sure to match the category name with the ID. For example: 
 Groceries in BudgetA's note: Joint_ID:001. 
