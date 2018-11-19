@@ -241,10 +241,13 @@ def sendBulkTransactions(bulk):
         # As for now it sends a request for every transaction which isn't ideal..
         url = 'https://api.youneedabudget.com/v1/budgets/' + targetbudget + '/transactions/bulk?access_token=' + str(getAPIKey())
         data = {'transactions':[transactiondata]}
-
         data = urllib.urlencode(data)
         req = urllib2.Request(url, data)
-        #response = urllib2.urlopen(req) # Response 400?
+        try: 
+            response = urllib2.urlopen(req)
+        except urllib2.HTTPError as e:
+            print e.code
+            print e.read()
         #print response.read() 
 
 ####################################################
@@ -388,7 +391,7 @@ if os.path.isfile('conf.txt') == False:
         f.write('# Do not include any spaces or additional information in your notes on YNAB. Do not remove quotation marks\n')
         f.write('# VALUES:\n')
         f.write('Create a Delta account and put this in the Account Notes: "Joint_Delta"\n')
-        f.write('DeltaCategoryNoteModifier: "Joint_ID:"\n')
+        f.write('DeltaCategoryNoteModifier: "Joint_ID:" - Example: Joint_ID:001, please do not use spaces before the value\n')
         #f.write('SeparatorAffix:"<!>"')
 with open('conf.txt', 'r') as f:
     f.readline()
