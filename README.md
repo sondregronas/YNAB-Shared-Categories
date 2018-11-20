@@ -6,37 +6,32 @@ To use this application, run the script once, and edit the key.txt with your own
 In the budgets you wish to share categories with, create a checking account and name it Delta. 
 Add "Joint_Delta" to the Notes of this account. Do this for every applicable budget.
 
-In the categories you wish to share, add "Joint_ID:XXX" (Do not add anything else at the moment this is not supported, where XXX is a number like 001) to the note of the category,
-do for all applicable categories. Again do this for all applicable budgets.
+In the categories you wish to share, add "<!>Joint_ID:XXX<!>" anywhere to the note of the category. Do so for every account you want synchronized
 Make sure to match the category name with the ID. For example: 
-Groceries in BudgetA's note: Joint_ID:001. 
-Groceries in BudgetB's note: Joint_ID:001
+Groceries in BudgetA's note: My note! <!>Joint_ID:001<!>.
+Groceries in BudgetB's note: Another note. <!>Joint_ID:001<!> <-- Shared Category ID.
+You can also use letters, words or symbols for your ID, as long as the syntax is the same between accounts
 
-The application currently doesn't work as it should, heres why:
+The application kinda works, but still lacks some important features:
  - It only grabs and caches Accounts & Categories once, so if you've created a new joint category after running the app, 
- you need to delete the caches folder.
- - The application doesn't run continously, in the future it will check for new transactions every ~10 minutes (adjustable)
- - Currently it does not send any data back to the YNAB server, this will be fixed soon.
+ you need to delete the caches folder to reset.
+ - The application needs to be manually executed whenever a new transaction is added (However you don't need to actively execute it, it recognizes every new transaction since last execution
 
-Keep in mind this application only handles new transactions, and ignores everything before the cache was created/updated.
+Keep in mind this application does not work retroactively and only handles new transactions, and ignores everything before the cache was created/updated.
  
-I'm not a programmer and have little experience with REST API's and Python, so things are probably not as ideal as they should be.
- 
-In the function parseTransactions you can get every transaction data that needs to be sent to the YNAB server. All transaction data is stored in
-'tr', and all the target account/category data is stored in 'categories' dictionaries.
- 
-In the function parseDeltas every transaction data is stored in the 'transaction' and 'delta' dictionaries, with the amount being deltaamount.
-This is an amount that is going to be added to the "To Be Budgeted" category for every Delta account.
+I'm not a programmer and have little experience with REST API's and Python, so things are probably not as optimized as they could be.
 
-Transaction example (How it's supposed to be when its working): 
+Transaction example: 
 Budget A spends -100$ in Groceries, in the account Visa
 Budget B receives a transaction of -100$ in Groceries, in the account Delta
 Budget A and B both recieve +50$ in their Delta accounts in the category: To Be Budgeted.
 
-The delta will then display the differences in spending, or what the recievers Budget owes the source Budget.
-This way only your share of the spending disappears from the 'To be budgeted' amount.
+If there are more than 2 accounts the share will be distributed evenly. For example with 1 person spending 100$ in a shared category with 4 people, the delta added is 75$. (Meaning only -25$ is deducted from To be Budgeted)
 
-I've intended for this script to be ran as a service in the background of a Raspberry Pi.
+The delta will then display the differences in spending, or what the recievers Budget owes the source Budget.
+This way you'll still be able to how much you have left to budget, regardless if you've received your share.
+
+I've intended for this script to be run off a Raspberry Pi.
 
 Any help in finishing this application will be appreciated!
 Apologies for the awful formatting and unreadable script :)
