@@ -240,7 +240,6 @@ def sendBulkTransactions(bulk):
         # Need to somehow sort by target_budget so to only send one request per budget - probably a really easy way to do this..
         # As for now it sends a request for every transaction which isn't ideal..
         url = 'https://api.youneedabudget.com/v1/budgets/' + targetbudget + '/transactions/bulk?access_token=' + str(getAPIKey())
-        print {'transactions':[transactiondata]}
         data = json.dumps({'transactions':[transactiondata]})
         clen = len(data)
         req = urllib2.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': clen})
