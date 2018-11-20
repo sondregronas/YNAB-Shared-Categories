@@ -108,7 +108,7 @@ def removekey(d, key):
 # Returns All Account Info matching the Account Note Modifier. Takes the ID String & JSON in /budgets/-ID/
 def findAccountByNote(note, json): # FINISHED
     for item in json['data']['budget']['accounts']:
-        if(item['note'] == note):
+        if item['note'] != None and note in item['note']:
             return item
 
 # Used by getAllJointCategories - Searches every category for the string 'modNoteDeltaCategory' without ID in the Notes & Returns a dictionairy
@@ -118,8 +118,17 @@ def searchAllJointCategories(syntax, json): # Might be redundant with caching?
     for item in json['data']['budget']['categories']:
         if item['note'] != None:
             if str(syntax) in str(item['note']):
+                note_id = item['note'].split(modSeparatorAffix)[1]
+                item = removekey(item, 'note')
+                item.update({'note':note_id})
                 output.append(item)
     return output
+
+def fetchToBeBudgeted(budget_id, name):
+    json = YNAB(str(budget_id))
+    for item in json['data']['budget']['categories']:
+        if item['name'] == name:
+            return item['id']
 
 # Grabs all JointCategoryIds to reduce fetching of JSON
 def getAllJointCategories(AllDeltaAccounts): # Needs Caching & Delta
@@ -174,9 +183,9 @@ def getNewJointTransactionsBACKUP(json, AllJointCategories, AllDeltaAccounts, pa
     return output
 
 # Checks for new transactions and outputs their data, including budget_id, budget_name, and note (to find the category ID)
+# This fetches both deleted and not deleted
 def getNewJointTransactions(AllJointCategories, AllDeltaAccounts, budget_id):
     output = []
-
     param = budget_id+'/transactions'
     json = YNAB(param)
     server_knowledge = json['data']['server_knowledge']
@@ -187,8 +196,8 @@ def getNewJointTransactions(AllJointCategories, AllDeltaAccounts, budget_id):
     for item in json['data']['transactions']:
         checkCategory = isCategoryJoint(item['category_id'], AllJointCategories)
         if checkCategory != False:
-            item.update({'budget_id':checkCategory['budget_id'], 'budget_name':checkCategory['budget_name'], 'note':checkCategory['note']})
             if not isAccountDelta(item['account_id'], AllDeltaAccounts):
+                item.update({'budget_id':checkCategory['budget_id'], 'budget_name':checkCategory['budget_name'], 'note':checkCategory['note']})
                 output.append(item)
     return output
 
@@ -198,8 +207,6 @@ def getTransactionReceivers(senders_budget, AllDeltaAccounts):
     for budgets in AllDeltaAccounts:
         if senders_budget != budgets['budget_id']:
             output.append(budgets)
-    #print 'OUTPUT'
-    #print output
     return output
 
 # Update the variable MasterJSON (Cache)
@@ -229,51 +236,68 @@ def UpdateJointCategories(json, AllDeltaAccounts):
     #
     return data
 
-####################################################
-####################################################
 
+# Only return the transactions from a given budget
+def transactionSorter(transactions, account):
+    output = []
+    for index in transactions:
+        if index['target_budget'] == account['budget_id']:
+            output.append(index)
+    return output
+
+# Sends all parsed transactions to the correspdoing budget_id/transactions/bulk
+# This shouldnt need more work AFAIK
 def sendBulkTransactions(bulk):
-    for index in bulk:
-        targetbudget = index['target_budget']
-        transactiondata = removekey(index,'target_budget')
+    # Only run if there are new transactions
+    if bulk != []:
+        # Sort by budget - to prevent spamming the server with requests
+        for acc in AllDeltaAccounts:
+            tr = []
+            transactiondata = []
+            tr = transactionSorter(bulk, acc)
 
-        # Need to somehow sort by target_budget so to only send one request per budget - probably a really easy way to do this..
-        # As for now it sends a request for every transaction which isn't ideal..
-        url = 'https://api.youneedabudget.com/v1/budgets/' + targetbudget + '/transactions/bulk?access_token=' + str(getAPIKey())
-        data = json.dumps({'transactions':[transactiondata]})
-        clen = len(data)
-        req = urllib2.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': clen})
-        try: 
-            response = urllib2.urlopen(req)
-        except urllib2.HTTPError as e:
-            print e.code
-            print e.read()
-        print response.read()
+            for i in tr:
+                data = removekey(i,'target_budget')
+                transactiondata.append(data)
 
-####################################################
-####################################################
+            targetbudget = str(tr[0]['target_budget'])
+            url = 'https://api.youneedabudget.com/v1/budgets/' + targetbudget + '/transactions/bulk?access_token=' + str(getAPIKey())
+            data = json.dumps({'transactions':transactiondata})
+            clen = len(data)
+            req = urllib2.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': clen})
+            try: 
+                response = urllib2.urlopen(req)
+            except urllib2.HTTPError as e:
+                print e.code
+                print e.read()
+            print response.read()
+    else:
+        print 'No transactions sent. Transactiondata should be []: ' + str(bulk)
 
-# Missing Category ID = To Be Budgeted. Currently goes to "This needs a category"
+
 # parseDeltas prepares the delta transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseDeltas(transaction):
     output = []
     for delta in AllDeltaAccounts:
-        data = {'category_id':None, # Not sure what the easiest way to retrieve this is. Needs to match the "To Be Budgeted" category of every account.
+        x = transaction['amount']
+        y = len(AllDeltaAccounts)
+        cat_id = str(fetchToBeBudgeted(str(delta['budget_id']), 'To be Budgeted'))
+        data = {'category_id': cat_id,
                 'category_name':'To be Budgeted', 
                 'account_id':delta['id'], 
                 'account_name':delta['name'],
-                'amount':-1*(transaction['amount']/len(AllDeltaAccounts)),
-                'memo': 'Split delta from ' + transaction['payee_name'] + '. Source: ' + transaction['budget_name'],
+                'amount':-1*(x-(x/y)),
+                'memo': 'Split from ' + transaction['category_name'] + ', ' + transaction['payee_name'] + '. Source: ' + transaction['budget_name'],
                 'date': transaction['date'],
                 'target_budget':delta['budget_id']
                 }
         output.append(data) # For bulk transaction
     return output
 
-# This should be complete AFAIK - Except it doesn't handle deleted or edited transactions. 
-# It doesn't include deleted transactions however, edited transactions are treated as new transactions.
-# Don't know if 'subtransactions' work either, but idk if it's necessary
-# targetpayeeid and transactionid Might be needed - I don't know?
+# This only parses new transactions. Edited transactions are currently treated as new. Deleted transactions are not parsed.
+# Not sure how to filter out the delta between edited transactions, as the delta request doesnt seem to filter it.
+# An idea would be to cache every transaction and compare the new ID with the old one, and pass the transaction on as a separate request with the amount
+# being the difference between new and old amount. Think that should work.
 # parseTransactions prepares the main transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseTransactions(jointTransactions):
     output = []
@@ -282,9 +306,13 @@ def parseTransactions(jointTransactions):
         # Make sure transactions are new, and not deleted
         if not tr['deleted']:
             # Sends transaction data to parseDeltas
-            output = parseDeltas(tr) # For bulk transaction
+            output.extend(parseDeltas(tr)) # For bulk transaction
             print 'Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']
             # Get the receivers of the new transaction
+            
+            ####
+            #SEND THIS TO A SEPARATE DEF
+            ####
             for budgets in getTransactionReceivers(tr['budget_id'], AllDeltaAccounts):
                 for categories in AllJointCategories:
                     if tr['note'] == categories['note'] and tr['category_id'] != categories['id']:
@@ -323,7 +351,14 @@ def parseTransactions(jointTransactions):
                                                     'memo': memosrcbudget})
 
                             transactiondata.update ({'target_budget':targetbudget})
+
                             output.append(transactiondata) # For bulk transaction
+            ####
+            #SEND THIS TO A SEPARATE DEF
+            ####
+        else:
+            print 'Detected deleted transaction. Parsing in with negative amount'
+            # do stuff here
     sendBulkTransactions(output)
 
 def main():
@@ -352,19 +387,21 @@ def main():
 
 if os.path.isfile('conf.txt') == False:
     with open('conf.txt', 'w') as f:
-        f.write('# You can edit the modifier to whatever you would like.\n')
-        f.write('# Do not include any spaces or additional information in your notes on YNAB. Do not remove quotation marks\n')
+        f.write('# You can edit the modifier and affix to whatever you would like.\n')
+        f.write('# Example Delta Account Note: "My delta account! (Joint_Delta)\n')
+        f.write('# Example Category Note: Try to stay within budget! <!>Joint_ID: 01<!>')
         f.write('# VALUES:\n')
         f.write('Create a Delta account and put this in the Account Notes: "Joint_Delta"\n')
-        f.write('DeltaCategoryNoteModifier: "Joint_ID:" - Example: Joint_ID:001, please do not use spaces before the value\n')
-        #f.write('SeparatorAffix:"<!>"')
+        f.write('DeltaCategoryNoteModifier: "Joint_ID:"\n')
+        f.write('SeparatorAffix:"<!>"')
 with open('conf.txt', 'r') as f:
+    f.readline()
     f.readline()
     f.readline()
     f.readline()
     modNoteDeltaAccount = f.readline().split('"')[1]
     modNoteDeltaCategory = f.readline().split('"')[1]
-    #modSeparatorAffix = f.readline().split('"')[1]
+    modSeparatorAffix = f.readline().split('"')[1]
 
 
 MasterJSON = ''
