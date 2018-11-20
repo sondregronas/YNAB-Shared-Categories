@@ -240,66 +240,36 @@ def sendBulkTransactions(bulk):
         # Need to somehow sort by target_budget so to only send one request per budget - probably a really easy way to do this..
         # As for now it sends a request for every transaction which isn't ideal..
         url = 'https://api.youneedabudget.com/v1/budgets/' + targetbudget + '/transactions/bulk?access_token=' + str(getAPIKey())
-        data = {'transactions':[transactiondata]}
-        data = urllib.urlencode(data)
-        req = urllib2.Request(url, data)
+        print {'transactions':[transactiondata]}
+        data = json.dumps({'transactions':[transactiondata]})
+        clen = len(data)
+        req = urllib2.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': clen})
         try: 
             response = urllib2.urlopen(req)
         except urllib2.HTTPError as e:
             print e.code
             print e.read()
-        #print response.read() 
+        print response.read()
 
 ####################################################
 ####################################################
 
-# Missing Category ID = To Be Budgeted
-# Other than that I believe it is completed, unless payeeid or transactionid is required
+# Missing Category ID = To Be Budgeted. Currently goes to "This needs a category"
 # parseDeltas prepares the delta transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseDeltas(transaction):
     output = []
     for delta in AllDeltaAccounts:
-        # Variables of necessary data
-        targetaccount = delta['id']
-        targetaccountname = delta['name']
-        targetcategoryid = '' # Not sure what the easiest way to retrieve this is, or if this is necessary
-        targetcategoryname = 'To be Budgeted'
-        targetbudget = delta['budget_id']
-        targetpayeeid = '' # Not sure if this is needed
-        transactionid = '' # Not sure if this is needed?
-        memosrcbudget = 'Split delta for transaction at ' + transaction['payee_name'] + ' Source: ' + transaction['budget_name'] + '. Original Amount: ' + str(transaction['amount'])
-
-        deltaamount = -1*(transaction['amount']/len(AllDeltaAccounts))
-
-        # Remove 'note', 'budget_id', 'budget_name'. - These were only needed for budget verification and not part of the transactions originally.
-        transactiondata = removekey(transaction, 'note') 
-        transactiondata = removekey(transactiondata, 'budget_id')
-        transactiondata = removekey(transactiondata, 'budget_name')
-
-        # Update category & Account
-        transactiondata = removekey(transactiondata, 'category_id')
-        transactiondata = removekey(transactiondata, 'category_name')
-        transactiondata = removekey(transactiondata, 'account_id')
-        transactiondata = removekey(transactiondata, 'account_name')
-        transactiondata = removekey(transactiondata, 'payee_id')
-        transactiondata = removekey(transactiondata, 'id')
-        transactiondata = removekey(transactiondata, 'amount')
-        transactiondata = removekey(transactiondata, 'memo')
-
-        transactiondata.update({'category_id':targetcategoryid, 
-                                'category_name':targetcategoryname, 
-                                'account_id':targetaccount, 
-                                'account_name':targetaccountname,
-                                'payee_id':targetpayeeid,
-                                'id':transactionid,
-                                'amount':deltaamount,
-                                'memo': memosrcbudget})
-        
-        transactiondata.update ({'target_budget':targetbudget})
-        output.append(transactiondata) # For bulk transaction
-        
+        data = {'category_id':None, # Not sure what the easiest way to retrieve this is. Needs to match the "To Be Budgeted" category of every account.
+                'category_name':'To be Budgeted', 
+                'account_id':delta['id'], 
+                'account_name':delta['name'],
+                'amount':-1*(transaction['amount']/len(AllDeltaAccounts)),
+                'memo': 'Split delta from ' + transaction['payee_name'] + '. Source: ' + transaction['budget_name'],
+                'date': transaction['date'],
+                'target_budget':delta['budget_id']
+                }
+        output.append(data) # For bulk transaction
     return output
-
 
 # This should be complete AFAIK - Except it doesn't handle deleted or edited transactions. 
 # It doesn't include deleted transactions however, edited transactions are treated as new transactions.
@@ -331,9 +301,7 @@ def parseTransactions(jointTransactions):
                             targetcategoryid = categories['id']
                             targetcategoryname = categories['name']
                             targetbudget = budgets['budget_id']
-                            targetpayeeid = '' # Not sure if this is needed?
-                            transactionid = '' # Not sure if this is needed?
-                            memosrcbudget = tr['memo'] + ', Transaction From: ' + tr['budget_name']
+                            memosrcbudget = 'Source: ' + tr['budget_name'] + '. ' + tr['memo']
 
                             # Remove 'note', 'budget_id', 'budget_name'. - These were only needed for budget verification and not part of the transactions originally.
                             transactiondata = removekey(tr, 'note') 
@@ -353,8 +321,6 @@ def parseTransactions(jointTransactions):
                                                     'category_name':targetcategoryname,
                                                     'account_id':targetaccount,
                                                     'account_name':targetaccountname,
-                                                    'payee_id':targetpayeeid,
-                                                    'id':transactionid,
                                                     'memo': memosrcbudget})
 
                             transactiondata.update ({'target_budget':targetbudget})
