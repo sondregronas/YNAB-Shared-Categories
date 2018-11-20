@@ -7,6 +7,8 @@ In the budgets you wish to share categories with, create a checking account and 
 Add "Joint_Delta" to the Notes of this account. Do this for every applicable budget.
 
 In the categories you wish to share, add "<!>Joint_ID:XXX<!>" anywhere to the note of the category. Do so for every account you want synchronized
+If you want to change the syntax to something else, replace it in the conf.txt file. Keep everything within the quotationmarks
+
 Make sure to match the category name with the ID. For example: 
 Groceries in BudgetA's note: My note! <!>Joint_ID:001<!>.
 Groceries in BudgetB's note: Another note. <!>Joint_ID:001<!> <-- Shared Category ID.
