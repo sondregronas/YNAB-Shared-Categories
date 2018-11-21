@@ -18,7 +18,8 @@ In the categories you wish to share, add "<!>Shared_ID:XXX<!>" anywhere to the n
 
 Make sure to match the category name with the ID. For example: 
 > Groceries in BudgetA's note: My note! <!>Shared_ID:001<!>. <br>
-> Groceries in BudgetB's note: Another note. <!>Shared_ID:001<!> <-- Shared Category ID. <br>
+> Groceries in BudgetB's note: Another note. <!>Shared_ID:001<!> <-- Shared Category ID. 
+
 You can also use letters, words or symbols for your ID, as long as the note affix and note modifier is the same between accounts
 <br>
 
