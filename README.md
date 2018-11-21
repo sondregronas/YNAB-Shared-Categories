@@ -13,13 +13,13 @@ And you're done. Now everytime you want to synchronize the transactions run it a
 In the budgets you wish to share categories with, create a checking account and name it Delta, or somethinge else. 
 Add "Shared_Delta" to the Notes of this account. Do this for every budget you want to share categories with.
 
+#### Categories
+In the categories you wish to share, add "<!>Shared_ID:XXX<!>" anywhere to the note of the category. Do so for every account you want synchronized
+
 Make sure to match the category name with the ID. For example: 
 > Groceries in BudgetA's note: My note! <!>Shared_ID:001<!>. <br>
 > Groceries in BudgetB's note: Another note. <!>Shared_ID:001<!> <-- Shared Category ID. <br>
 You can also use letters, words or symbols for your ID, as long as the note affix and note modifier is the same between accounts
-
-#### Categories
-In the categories you wish to share, add "<!>Shared_ID:XXX<!>" anywhere to the note of the category. Do so for every account you want synchronized
 <br>
 
 ## Configuration
