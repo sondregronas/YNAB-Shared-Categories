@@ -385,11 +385,11 @@ def parseTransactions(jointTransactions):
 if os.path.isfile('conf.txt') == False:
     with open('conf.txt', 'w') as f:
         f.write('# You can edit the modifier and affix to whatever you would like.\n')
-        f.write('# Example Delta Account Note: "My delta account! (Joint_Delta)\n')
-        f.write('# Example Category Note: Try to stay within budget! <!>Joint_ID: 01<!>')
+        f.write('# Example Delta Account Note: "My delta account! (Shared_Delta)\n')
+        f.write('# Example Category Note: Try to stay within budget! <!>Shared_ID: 01<!>')
         f.write('# VALUES:\n')
-        f.write('Create a Delta account and put this in the Account Notes=Joint_Delta\n')
-        f.write('Shared Category Note Modifier=Joint_ID:\n')
+        f.write('Shared Account Note=Shared_Delta\n')
+        f.write('Shared Category Note Modifier=Shared_ID:\n')
         f.write('Shared Category Note Affix=<!>')
         f.write('Detect Deleted transactions=1')
 with open('conf.txt', 'r') as f:
