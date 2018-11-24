@@ -390,7 +390,7 @@ if os.path.isfile('conf.txt') == False:
         f.write('# VALUES:\n')
         f.write('Shared Account Note=Shared_Delta\n')
         f.write('Shared Category Note Modifier=Shared_ID:\n')
-        f.write('Shared Category Note Affix=<!>')
+        f.write('Shared Category Note Affix=<!>\n')
         f.write('Detect Deleted transactions=1')
 with open('conf.txt', 'r') as f:
     f.readline()
