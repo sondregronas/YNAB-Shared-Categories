@@ -1,4 +1,5 @@
-    #####
+#!/usr/local/bin/python
+#####
     #
     # Todo
     # Verify budgets account & categories data without deleting
