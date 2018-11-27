@@ -1,4 +1,4 @@
-#####
+    #####
     #
     # Todo
     # Verify budgets account & categories data without deleting
@@ -311,7 +311,8 @@ def parseDeltas(transaction):
                 'amount':-1*(x-(x/y)),
                 'memo': 'Split from ' + transaction['category_name'] + ', ' + transaction['payee_name'] + '. Source: ' + transaction['budget_name'],
                 'date': transaction['date'],
-                'target_budget':delta['budget_id']
+                'target_budget':delta['budget_id'],
+                'payee_name':transaction['payee_name']
                 }
         output.append(data) # For bulk transaction
     return output
