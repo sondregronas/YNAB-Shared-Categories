@@ -386,7 +386,7 @@ if os.path.isfile('conf.txt') == False:
     with open('conf.txt', 'w') as f:
         f.write('# You can edit the modifier and affix to whatever you would like.\n')
         f.write('# Example Delta Account Note: "My delta account! (Shared_Delta)\n')
-        f.write('# Example Category Note: Try to stay within budget! <!>Shared_ID: 01<!>')
+        f.write('# Example Category Note: Try to stay within budget! <!>Shared_ID: 01<!>\n')
         f.write('# VALUES:\n')
         f.write('Shared Account Note=Shared_Delta\n')
         f.write('Shared Category Note Modifier=Shared_ID:\n')
