@@ -36,12 +36,12 @@ Just thought I'd add this here if people want to have it running for themselves 
 Now everytime you run the script it will check for new transactions and send them to every shared account.<br>
 
 ###### Automate the script
-We can use crontab to automatically run the script
-9. Run ```sudo crontab -e``` and select nano - if this option comes up<br>
-10. Add the following line to the end of the document:
+We can use crontab to automatically run the script <br>
+- Run ```sudo crontab -e``` and select nano - if this option comes up<br>
+- Add the following line to the end of the document:
 ```*/10 * * * * cd /home/pi/python_scripts/YNAB-Shared-Categories/ && python /home/pi/python_scripts/YNAB-Shared-Categories/YNAB_Shared_Categories.py```<br>
-11. The */10 tells it to run every 10 minutes, you can change this if you want.<br>
-12. Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm<br>
+- The */10 tells it to run every 10 minutes, you can change this if you want.<br>
+- Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm<br>
 
 ###### Update the git
 To update the git simply go to the directory ```cd python_scripts/YNAB-Shared-Categories/``` and run: ```sudo git reset --hard master```
