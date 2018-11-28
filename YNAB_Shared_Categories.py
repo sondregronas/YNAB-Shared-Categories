@@ -1,7 +1,7 @@
     #####
     #
     # Todo
-    # Verify budgets account & categories data without deleting
+    # Fix 'mergeDicts' line 197
     #
     #####
     #
@@ -99,18 +99,20 @@ def fetchData(url):
             sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
     return json.load(data)
 
-# Fetches data from the server and writes it to cache
-def YNAB_Fetch(param):
+def writeCache(data, param):
     path = getCachePath(param)
-    url = getURL(param)
-    data = fetchData(url)
-
-    # Write Cache
     if not os.path.exists('caches'):
         os.mkdir('caches')
     with open(path, 'w') as cache:
         json.dump(data,cache)
     return data
+
+# Fetches data from the server and writes it to cache
+def YNAB_Fetch(param):
+    url = getURL(param)
+    data = fetchData(url)
+    x = writeCache(data,param)
+    return x
 
 ######################################
 # Used mainly only by other functions
@@ -137,9 +139,10 @@ def getAllSharedCategories(): # Needs Caching & Delta
     for item in AllDeltaAccounts:
         data = searchAllSharedCategories(CombinedAffix, YNAB(item['budget_id']))
         for index in data:
-            index.update({'budget_name':item['budget_name'], 'budget_id':item['budget_id']})
-            output.append(index)
-            print str('Found Category: ' + index['name'] + ' With ID: ' + index['id'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name'] + ' with ID: ' + index['budget_id'])
+            if index['deleted'] == False:
+                index.update({'budget_name':item['budget_name'], 'budget_id':item['budget_id']})
+                output.append(index)
+                print str('Found Category: ' + index['name'] + ' With ID: ' + index['id'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name'] + ' with ID: ' + index['budget_id'])
     return output
 
 # Used to store all Delta Accounts in a dictionary
@@ -147,11 +150,14 @@ def getAllDeltaAccounts():
     output = []
     # Grabbing all Delta Account IDs
     for item in MasterJSON['data']['budgets']:
-        acc = findAccountByNote(modNoteDeltaAccount, YNAB(item['id']))
-        if acc != None:
+        json = YNAB(item['id'])
+        acc = findAccountByNote(modNoteDeltaAccount, json)
+        if acc != None and acc['deleted'] == False:
+            print str('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id'])
             acc.update({'budget_name':item['name'], 'budget_id':item['id']})
+            print 'Checking for updates in ' + item['name']
+            getBudgetUpdates(item['id'])
             output.append(acc)
-            print str('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + acc['budget_name'] + ' with ID: ' + acc['budget_id'])
     return output
 
 # Used by newTransactions parser to see if the new transaction is from a shared category
@@ -187,35 +193,18 @@ def fetchCategoryIdByName(budget_id, name):
 # Data related functions
 ######################################
 
-###############################################
-###############################################
-###############################################
-###############################################
+# TO-DO
+def mergeDicts(old, changes):
+    d1 = old
+    d2 = changes
+    #d1 = update(d1,d2)
+    return d1
 
-# Once these 2 are working, everything should be ready for use :)
-
-### NEEDS WORK, TO DO
-def mergeCache(budget_id, changes):
-    print 'TO DO - mergeCache'
-    # Main cache (<budget_id>.cache)
-    #print YNAB_ParseCache(budget_id)
-    # Merge with 'changes'
-    #print changes
-
-    # If matches ID:
-    #   ifdeleted = true, 
-    #       then remove key from main cache file ('caches/'+budget_id+'.cache')
-    #   if items edited
-    #       update main cache file with new values
-    #   if item new
-    #       add key to main cache file
-
-### NEEDS WORK, DOES NOT WRITE TO CACHE
-# Fetches new data NOT WORKING
+# Fetches new data & adds it to the cache
 def getBudgetUpdates(budget_id):
     param = budget_id+'?last_knowledge_of_server='
     path = getCachePath(param)
-    if os.path.isfile(path): # THIS WILL NEVER BE TRUE SINCE THERE IS NO CACHE
+    if os.path.isfile(path):
         json = YNAB(param)
         x = json['data']['server_knowledge']
     else: 
@@ -224,14 +213,14 @@ def getBudgetUpdates(budget_id):
     param = param + str(x)
     url = getURL(param)
     data = fetchData(url)
-    # Write data to a cache file
-    mergeCache(budget_id,data)
-    return data
+    data = mergeDicts(json,data)
+    writeCache(data, str(budget_id))
 
-###############################################
-###############################################
-###############################################
-###############################################
+    # TEMPORARY FIX
+    print 'Running temporary fix - Uses more server requests (Max 200/hr)'
+    data = YNAB_Fetch(str(budget_id))
+    # TEMPORARY FIX
+    return data
 
 # Checks for new transactions and outputs their data, including budget_id, budget_name, and note (to find the category ID)
 # This fetches both deleted and not deleted
@@ -409,14 +398,12 @@ CombinedAffix = modSeparatorAffix+modNoteDeltaCategory
 
 
 # SCRIPT START
-MasterJSON = data = YNAB_Fetch('')
+MasterJSON = YNAB_Fetch('')
 print 'Grabbed MasterJSON'
 AllDeltaAccounts = getAllDeltaAccounts()
 print 'All Joint Account IDs grabbed.'
 AllSharedCategories = getAllSharedCategories()
 print 'All Joint Category IDs grabbed.'
-for item in AllDeltaAccounts:
-    getBudgetUpdates(item['budget_id'])
 
 transactions = []
 for item in AllDeltaAccounts:
