@@ -3,9 +3,9 @@ Created with Python 2.7.13 - https://www.python.org/downloads/release/python-271
 <br>
 
 ## Usage
-To use this application, install Python from above and run the script once, and edit the key.txt with your own access token from https://app.youneedabudget.com/settings/developer
+To use this application, install Python from above and run the script once, and edit (alternatively create) the key.txt with your own access token from https://app.youneedabudget.com/settings/developer
 
-After you've added the Shared Delta Accounts and categories as described below, run it again to create initial caches (A /caches/ folder should appear). 
+After you've added the Shared Delta Accounts and categories as described below, run it again to create initial caches (A /caches/ folder should appear).
 
 And you're done. Now everytime you want to synchronize the transactions run it again. I'm not sure how to automate the process on Windows/Mac, but I'll eventually try and set something up using a website if I can.
 
@@ -47,7 +47,7 @@ We can use crontab to automatically run the script <br>
 To update the git simply go to the directory ```cd python_scripts/YNAB-Shared-Categories/``` and run: ```sudo git reset --hard master```
 
 ###### Clear cache
-Unfortunately I still haven't worked out how to update the caches for categories / accounts, so if a category has been modified you will need to flush the cache. Do so by going to the directory and run ```sudo rm -r caches/```
+Incase something went wrong or somethings no longer working it may be necessary to clear the cache. Do so by running ```sudo rm -r caches/``` in the script directory.
 
 ## Configuration
 If you want some of the syntaxes, do so in the conf.txt file.
@@ -58,9 +58,7 @@ If you want some of the syntaxes, do so in the conf.txt file.
 
 ## Status
 The application works, but still lacks some important features:
- - It only grabs and caches Accounts & Categories once, so if you've created a new joint category after running the app, 
- you need to delete the caches folder to reset.
- - The application needs to be manually executed whenever a new transaction is added (However you don't need to actively execute it, it recognizes every new transaction since last execution
+ - The application needs to be manually executed whenever a new transaction is added (However you don't need to actively execute it, it recognizes every new transaction since last execution) - You can however schedule a task to run it every X minutes. I'll look into adding a host website to do this if I can figure that out.
 
 ## Transaction example: 
 > Budget A spends -100$ in Groceries, in the account Visa <br>
@@ -73,6 +71,6 @@ The delta will then display the differences in spending, or what the recievers B
 This way you'll still be able to how much you have left to budget, regardless if you've received your share.
 
 ## Disclaimer
-Keep in mind this application does not work retroactively and only handles new transactions, and ignores everything before the cache was created/updated.
+Keep in mind this application does not work retroactively and only handles new transactions, and ignores everything before its first run.
 
 I'm not a programmer and have little experience with REST API's and Python, so things are probably not as optimized as they could be.
