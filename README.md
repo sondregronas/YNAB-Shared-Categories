@@ -56,6 +56,7 @@ If you want some of the syntaxes, do so in the conf.txt file.
 > Shared Category Note Modifier (Shared_ID:) is optional and can be set to whatever. <br>
 > Shared Category Note Affix (<!>) (This IS required and but be set to whatever you'd like. Please put this on both sides of the ID <br>
 > Detect Deleted transactions (1) determines whether or not the script should handle deleted transactions (Same as a regular transaction but with negative amount) (Default 1).
+> X-Rate-Limit Safe Treshold (20) gives the script some headroom when it comes to the limited amount of responses you can throw to the YNAB server. If you run the script too frequently you might hit the ceiling before the script finishes. This allows the script to run only if it has more than 20 requests left to send. (You should have atleast 5 per user)
 
 ## Status
 The application works, but:
