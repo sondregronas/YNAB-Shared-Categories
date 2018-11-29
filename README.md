@@ -44,7 +44,8 @@ We can use crontab to automatically run the script <br>
 - Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm<br>
 
 ###### Update the git
-To update the git simply go to the directory ```cd python_scripts/YNAB-Shared-Categories/``` and run: ```sudo git pull```
+To update the git simply go to the directory ```cd python_scripts/YNAB-Shared-Categories/``` and run: ```sudo git pull```<br>
+It may also be necessary to remove conf.txt if the configuration handler was changed. Run ```sudo rm conf.txt``` I'll fix this later so that this won't be necessary.
 
 ###### Clear cache
 If you need to clear the cache you can do so by running ```sudo rm -r caches/``` in the script directory.
