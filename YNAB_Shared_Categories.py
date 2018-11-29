@@ -1,15 +1,16 @@
     #####
     #
     # Todo
-    # Fix 'mergeDicts' line 197
+    # Verify budgets account & categories data without deleting
     #
     #####
     #
     # Low priority
     # Sync Budgeted Amount in Joint Categories between all Budgets (If possible by date modified, or by highest number)
-    # Be able to mark other transactions as "JOINT" that are not part of a joint category with memos, adding them to Delta without a category
-    # Detected deleted or edited transactions & update all + delta if possible
-    # Have a neat conf.txt file with more options like "Standard Transaction text", "Standard Delta Text", etc.
+    # Be able to mark other transactions as "JOINT" that are not part of a joint category with memos, adding them to Delta without category
+    # Detected edited transactions and only parse the difference
+    # Have a neater conf.txt file with more options like "Standard Transaction text", "Standard Delta Text", etc.
+    # Make a web platform instead of running locally
     #
     ####
 
@@ -142,7 +143,7 @@ def getAllSharedCategories(): # Needs Caching & Delta
             if index['deleted'] == False:
                 index.update({'budget_name':item['budget_name'], 'budget_id':item['budget_id']})
                 output.append(index)
-                print str('Found Category: ' + index['name'] + ' With ID: ' + index['id'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name'] + ' with ID: ' + index['budget_id'])
+                print ('Found Category: ' + index['name'] + ' With ID: ' + index['id'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name'] + ' with ID: ' + index['budget_id']).encode('utf8')
     return output
 
 # Used to store all Delta Accounts in a dictionary
@@ -153,9 +154,9 @@ def getAllDeltaAccounts():
         json = YNAB(item['id'])
         acc = findAccountByNote(modNoteDeltaAccount, json)
         if acc != None and acc['deleted'] == False:
-            print str('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id'])
+            print ('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id']).encode('utf8')
             acc.update({'budget_name':item['name'], 'budget_id':item['id']})
-            print 'Checking for updates in ' + item['name']
+            print ('Checking for updates in ' + item['name']).encode('utf8')
             getBudgetUpdates(item['id'])
             output.append(acc)
     return output
@@ -316,7 +317,7 @@ def verifyTransaction(tr):
             if tr['note'] == categories['note'] and tr['category_id'] != categories['id']:
                 if categories['budget_id'] == budgets['budget_id']:
                     # Debug message
-                    print 'Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name'] + '. ID: ' + budgets['budget_id']
+                    print ('Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name'] + '. ID: ' + budgets['budget_id']).encode('utf8')
 
                     # Variables of necessary data
                     for delta in AllDeltaAccounts:
