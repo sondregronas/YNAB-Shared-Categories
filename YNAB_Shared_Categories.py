@@ -98,9 +98,9 @@ def fetchData(url):
             sys.exit('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
         if e.code == 500:
             sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
-    xrate = data.info().get('X-Rate-Limit').split('/')[0]
-    if int(xrate) >= 180: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
-        sys.exit('Surpassed X-Rate-Limit Safety treshold (180/200), will run once more is available')
+    xrate = data.info().get('X-Rate-Limit')
+    if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)): #Safety Treshold, incase there isn't enough X-Rates to complete the script.
+        sys.exit('Surpassed X-Rate-Limit Safety treshold ' + xrate +', will run once more is available')
     return json.load(data)
 
 def writeCache(data, param):
@@ -115,8 +115,7 @@ def writeCache(data, param):
 def YNAB_Fetch(param):
     url = getURL(param)
     data = fetchData(url)
-    x = writeCache(data,param)
-    return x
+    return writeCache(data,param)
 
 ######################################
 # Used mainly only by other functions
@@ -379,13 +378,14 @@ def parseTransactions(jointTransactions):
 if os.path.isfile('conf.txt') == False:
     with open('conf.txt', 'w') as f:
         f.write('# You can edit the modifier and affix to whatever you would like.\n')
-        f.write('# Example Delta Account Note: "My delta account! (Shared_Delta)\n')
+        f.write('# Example Delta Account Note: "My delta account! (Shared_Delta)"\n')
         f.write('# Example Category Note: Try to stay within budget! <!>Shared_ID: 01<!>\n')
         f.write('# VALUES:\n')
         f.write('Shared Account Note=Shared_Delta\n')
         f.write('Shared Category Note Modifier=Shared_ID:\n')
         f.write('Shared Category Note Affix=<!>\n')
-        f.write('Detect Deleted transactions=1')
+        f.write('Detect Deleted transactions=1\n')
+        f.write('X-Rate-Limit Safe Treshold=20')
 with open('conf.txt', 'r') as f:
     f.readline()
     f.readline()
@@ -398,6 +398,8 @@ with open('conf.txt', 'r') as f:
         IncludeDeleted = True
     else:
         IncludeDeleted = False
+    xrate_safetytreshold = f.readline().split('=')[1].replace('\n','')
+
 CombinedAffix = modSeparatorAffix+modNoteDeltaCategory
 
 
