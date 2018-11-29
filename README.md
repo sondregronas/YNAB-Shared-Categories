@@ -47,18 +47,19 @@ We can use crontab to automatically run the script <br>
 To update the git simply go to the directory ```cd python_scripts/YNAB-Shared-Categories/``` and run: ```sudo git pull```
 
 ###### Clear cache
-Incase something went wrong or somethings no longer working it may be necessary to clear the cache. Do so by running ```sudo rm -r caches/``` in the script directory.
+If you need to clear the cache you can do so by running ```sudo rm -r caches/``` in the script directory.
 
 ## Configuration
 If you want some of the syntaxes, do so in the conf.txt file.
 > Shared Account Note (Shared_Delta) is required but can be set to whatever you'd like <br>
 > Shared Category Note Modifier (Shared_ID:) is optional and can be set to whatever. <br>
-> Shared Category Note Affix (<!>) is required and but be set to whatever you'd like. Please put this on both sides of the ID <br>
+> Shared Category Note Affix (<!>) (This IS required and but be set to whatever you'd like. Please put this on both sides of the ID <br>
 > Detect Deleted transactions (1) determines whether or not the script should handle deleted transactions (Same as a regular transaction but with negative amount) (Default 1).
 
 ## Status
-The application works, but still lacks some important features:
- - The application needs to be manually executed whenever a new transaction is added (However you don't need to actively execute it, it recognizes every new transaction since last execution) - You can however schedule a task to run it every X minutes. I'll look into adding a host website to do this if I can figure that out.
+The application works, but:
+ - The application needs to be manually executed whenever a new transaction is added (However you don't need to actively execute it, it recognizes every new transaction since last execution) 
+ - You can however schedule a task to run it every X minutes. I'll look into adding a host website to do this if I can figure that out.
 
 ## Transaction example: 
 > Budget A spends -100$ in Groceries, in the account Visa <br>
@@ -71,6 +72,6 @@ The delta will then display the differences in spending, or what the recievers B
 This way you'll still be able to how much you have left to budget, regardless if you've received your share.
 
 ## Disclaimer
-Keep in mind this application does not work retroactively and only handles new transactions, and ignores everything before its first run.
+Keep in mind this application does NOT work retroactively and only handles new transactions, and ignores everything before its first run. So this will work with already established budgets :).
 
-I'm not a programmer and have little experience with REST API's and Python, so things are probably not as optimized as they could be.
+I'm not a programmer and have little experience with REST API's and Python, so things can probably be more optimized. I would appreciate any help in that department :P.
