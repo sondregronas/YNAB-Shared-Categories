@@ -80,7 +80,9 @@ def removekey(d, key):
 ######################################
 
 # fetchData returns the data from an URL, but doesn't write cache
+xratemet = 0
 def fetchData(url):
+    global xratemet
     try:
         data = urllib2.urlopen(url)
     except urllib2.HTTPError, e:
@@ -99,8 +101,9 @@ def fetchData(url):
         if e.code == 500:
             sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
     xrate = data.info().get('X-Rate-Limit')
-    if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)): #Safety Treshold, incase there isn't enough X-Rates to complete the script.
+    if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
         sys.exit('Surpassed X-Rate-Limit Safety treshold ' + xrate +', will run once more is available')
+    xratemet += 1
     return json.load(data)
 
 def writeCache(data, param):
@@ -375,6 +378,7 @@ def parseTransactions(jointTransactions):
 # GLOBALS
 ######################################################
 
+#ConfigFile
 if os.path.isfile('conf.txt') == False:
     with open('conf.txt', 'w') as f:
         f.write('# You can edit the modifier and affix to whatever you would like.\n')
@@ -399,9 +403,7 @@ with open('conf.txt', 'r') as f:
     else:
         IncludeDeleted = False
     xrate_safetytreshold = f.readline().split('=')[1].replace('\n','')
-
 CombinedAffix = modSeparatorAffix+modNoteDeltaCategory
-
 
 # SCRIPT START
 MasterJSON = YNAB_Fetch('')
@@ -410,7 +412,6 @@ AllDeltaAccounts = getAllDeltaAccounts()
 print 'All Joint Account IDs grabbed.'
 AllSharedCategories = getAllSharedCategories()
 print 'All Joint Category IDs grabbed.'
-
 transactions = []
 for item in AllDeltaAccounts:
     print 'Checking new transactions in account: ' + item['budget_name'] + '. ID: ' + item['budget_id']
