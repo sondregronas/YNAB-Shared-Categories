@@ -98,6 +98,9 @@ def fetchData(url):
             sys.exit('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
         if e.code == 500:
             sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
+    xrate = data.info().get('X-Rate-Limit').split('/')[0]
+    if int(xrate) >= 180: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
+        sys.exit('Surpassed X-Rate-Limit Safety treshold (180/200), will run once more is available')
     return json.load(data)
 
 def writeCache(data, param):
