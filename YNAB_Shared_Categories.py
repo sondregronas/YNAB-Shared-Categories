@@ -19,6 +19,7 @@ import urllib
 import json
 import os
 import sys
+from shutil import copyfile
 
 ######################################
 # YNAB Related commands
@@ -123,6 +124,26 @@ def YNAB_Fetch(param):
 ######################################
 # Used mainly only by other functions
 ######################################
+
+# Creates a backup of every .transactions file, which can be recovered if the POST doesn't go through, so that the server_knowledge is reset.
+# is run at the start of the script
+def backupTransactionsCache():
+    for file in os.listdir('caches/'):
+        if file.endswith('.transactions'):
+            src = 'caches/'+file
+            dst = 'caches/'+file+'.backup'
+            copyfile(src,dst)
+
+# Recovers the .transactions files back to the old version. This runs if a POST request fails (In sendBulkTransactions) (also stops the script)
+# This allows it to keep the server_knowledge if a transaction didn't go through.
+# I suppose on extremely rare occasions this could mean one user might get double posted, but I find that highly unlikely.
+# Atleast it's easier to spot a duplicate than a missing transaction.
+def recoverTransactions():
+    for file in os.listdir('caches/'):
+        if file.endswith('.backup'):
+            src = 'caches/'+file
+            dst = ('caches/'+file).split('.backup')[0]
+            copyfile(src,dst)
 
 # Used by getAllSharedCategories
 # Searches every category for the string 'CombinedAffix' in notes, 
@@ -286,11 +307,12 @@ def sendBulkTransactions(bulk):
             try: 
                 response = urllib2.urlopen(req)
             except urllib2.HTTPError as e:
-                print e.code
-                print e.read()
+                recoverTransactions()
+                sys.exit(e.code)
+                sys.exit(e.read())
             print response.read()
     else:
-        print 'No transactions sent. Transactiondata should be []: ' + str(bulk)
+        print 'No transactions sent. Transactiondata should be [], = ' + str(bulk)
 
 # parseDeltas prepares the delta transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseDeltas(transaction):
@@ -406,6 +428,7 @@ with open('conf.txt', 'r') as f:
 CombinedAffix = modSeparatorAffix+modNoteDeltaCategory
 
 # SCRIPT START
+backupTransactionsCache()
 MasterJSON = YNAB_Fetch('')
 print 'Grabbed MasterJSON'
 AllDeltaAccounts = getAllDeltaAccounts()
