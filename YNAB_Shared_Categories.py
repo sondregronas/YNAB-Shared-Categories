@@ -302,8 +302,7 @@ def sendBulkTransactions(bulk):
             targetbudget = str(tr[0]['target_budget'])
             url = getURL(targetbudget+'/transactions/bulk')
             data = json.dumps({'transactions':transactiondata})
-            clen = len(data)
-            req = urllib2.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': clen})
+            req = urllib2.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': len(data)})
             try: 
                 response = urllib2.urlopen(req)
             except urllib2.HTTPError as e:
@@ -313,6 +312,7 @@ def sendBulkTransactions(bulk):
             print response.read()
     else:
         print 'No transactions sent. Transactiondata should be [], = ' + str(bulk)
+        recoverTransactions()
 
 # parseDeltas prepares the delta transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseDeltas(transaction):
