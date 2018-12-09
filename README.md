@@ -30,9 +30,10 @@ Just thought I'd add this here if people want to have it running for themselves 
 3. (Optional) Create a directory ```mkdir python_scripts``` and enter the directory ```cd python_scripts```<br>
 4. Run the command: ```sudo git clone https://github.com/sondregronas/YNAB-Shared-Categories/```<br>
 5. A directory "YNAB-Shared-Categories" was now added to this folder<br>
-6. Copy in your access-token to a file named key.txt with ```sudo nano /YNAB-Shared-Categories/key.txt```<br>
+6. Copy in your access-token to a file named key.txt with ```cd /YNAB-Shared-Categories/ && sudo nano key.txt```<br>
 7. Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm.<br>
-8. Run it once to create initial caches, it will only handle transactions after the initial run. ```sudo python /YNAB-Shared-Categories/YNAB-Shared-Categories.py```<br>
+8. Create a caches folder: ```sudo mkdir caches```
+9. Run it once to create initial caches, it will only handle transactions after the initial run. ```sudo python /YNAB-Shared-Categories/YNAB-Shared-Categories.py```<br>
 Now everytime you run the script it will check for new transactions and send them to every shared account.<br>
 
 ###### Automate the script
