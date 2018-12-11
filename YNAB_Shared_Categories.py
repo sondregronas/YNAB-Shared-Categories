@@ -329,7 +329,8 @@ def parseDeltas(transaction):
                 'memo': 'Split from ' + transaction['category_name'] + ', ' + transaction['payee_name'] + '. Source: ' + transaction['budget_name'],
                 'date': transaction['date'],
                 'target_budget':delta['budget_id'],
-                'payee_name':transaction['payee_name']
+                'payee_name':transaction['payee_name'],
+				'approved':transaction['approved']
                 }
         output.append(data) # For bulk transaction
     return output
