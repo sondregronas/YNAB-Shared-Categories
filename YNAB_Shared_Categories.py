@@ -249,8 +249,43 @@ def getBudgetUpdates(budget_id):
     # TEMPORARY FIX
     return data
 
-# Checks for new transactions and outputs their data, including budget_id, budget_name, and note (to find the category ID)
-# This fetches both deleted and not deleted
+# Checks if a transaction is in a shared category, and not in a delta account
+# Also parses Split transactions as separate entries
+def checkTransaction(item):
+    if item['subtransactions'] == []:
+        checkCategory = isCategoryShared(item['category_id'])
+        if checkCategory != False:
+            if not isAccountDelta(item['account_id']):
+                item.update({'budget_id':checkCategory['budget_id'], 
+                            'budget_name':checkCategory['budget_name'], 
+                            'note':checkCategory['note']})
+                output = []
+                output.append(item)
+                return output
+    else:
+        print 'Split Transaction detected'
+        output = []
+        for sub in item['subtransactions']:
+            checkCategory = isCategoryShared(sub['category_id'])
+            if checkCategory != False:
+                if not isAccountDelta(item['account_id']):
+                    x = removekey(item, 'subtransactions')
+                    x.update({
+                        'budget_id':checkCategory['budget_id'], 
+                        'budget_name':checkCategory['budget_name'], 
+                        'note':checkCategory['note'],
+                        'category_id':sub['category_id'],
+                        'amount':sub['amount'],
+                        'id':sub['id'],
+                        'transaction_id':sub['transaction_id'],
+                        'deleted':sub['deleted'],
+                        'memo':sub['memo'] + ' (Split)'
+                    })
+                    output.append(x)
+        if output != []:
+            return output
+
+# Fetches all new transactions in a budget & returns every transaction in a shared category
 def getNewJointTransactions(budget_id):
     output = []
     param = budget_id+'/transactions'
@@ -261,11 +296,10 @@ def getNewJointTransactions(budget_id):
         json = YNAB_Fetch(param + '?last_knowledge_of_server=' + str(server_knowledge))
 
     for item in json['data']['transactions']:
-        checkCategory = isCategoryShared(item['category_id'])
-        if checkCategory != False:
-            if not isAccountDelta(item['account_id']):
-                item.update({'budget_id':checkCategory['budget_id'], 'budget_name':checkCategory['budget_name'], 'note':checkCategory['note']})
-                output.append(item)
+        x = checkTransaction(item)
+        if x != None:
+            for i in x:
+                output.append(i)
     return output
 
 # Get every Budget except the source of transaction for a transaction
@@ -385,16 +419,16 @@ def parseTransactions(jointTransactions):
     # Check all Transactions
     for tr in jointTransactions:
         # Check if deleted, if yes change amount
-        if tr['deleted'] == True:
-            if IncludeDeleted == True:
+        if tr != None:
+            if tr['deleted'] == True and IncludeDeleted == True:
                 print 'Detected deleted transaction. Parsing in the negative amount'
                 tr.update({ 'amount':-1*(tr['amount']),
                             'memo':'DELETED TRANSACTION',
                             'payee_name':'Deleted'})
                 output.extend(verifyTransaction(tr))
-        else:
-            print 'Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']
-            output.extend(verifyTransaction(tr))
+            else:
+                print 'Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']
+                output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
 ######################################################
