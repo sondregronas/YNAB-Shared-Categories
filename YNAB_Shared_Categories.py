@@ -87,6 +87,8 @@ def fetchData(url):
     try:
         data = urllib2.urlopen(url)
     except urllib2.HTTPError, e:
+        print str(e) + ' Recovering backed up transactions.'
+        recoverTransactions()
         if e.code == 400:
             sys.exit('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
         if e.code == 401:
@@ -101,6 +103,7 @@ def fetchData(url):
             sys.exit('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
         if e.code == 500:
             sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
+
     xrate = data.info().get('X-Rate-Limit')
     if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
         sys.exit('Surpassed X-Rate-Limit Safety treshold ' + xrate +', will run once more is available')
@@ -128,6 +131,8 @@ def YNAB_Fetch(param):
 # Creates a backup of every .transactions file, which can be recovered if the POST doesn't go through, so that the server_knowledge is reset.
 # is run at the start of the script
 def backupTransactionsCache():
+    if not os.path.exists('caches'):
+        os.mkdir('caches')
     for file in os.listdir('caches/'):
         if file.endswith('.transactions'):
             src = 'caches/'+file
