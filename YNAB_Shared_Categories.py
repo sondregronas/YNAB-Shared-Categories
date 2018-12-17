@@ -87,7 +87,6 @@ def fetchData(url):
     try:
         data = urllib2.urlopen(url)
     except urllib2.HTTPError, e:
-        print e 
         print 'Recovering backed up transactions.'
         recoverTransactions()
         if e.code == 400:
@@ -104,6 +103,7 @@ def fetchData(url):
             sys.exit('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
         if e.code == 500:
             sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
+        sys.exit(e) 
 
     xrate = data.info().get('X-Rate-Limit')
     if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
