@@ -87,7 +87,8 @@ def fetchData(url):
     try:
         data = urllib2.urlopen(url)
     except urllib2.HTTPError, e:
-        print str(e) + ' Recovering backed up transactions.'
+        print e 
+        print 'Recovering backed up transactions.'
         recoverTransactions()
         if e.code == 400:
             sys.exit('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
