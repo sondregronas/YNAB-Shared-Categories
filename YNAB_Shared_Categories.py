@@ -1,18 +1,11 @@
     #####
     #
     # Todo
-    # Verify budgets account & categories data without deleting
+    # Web hosting
+    # Sync budgeted amount
+    # Cross YNAB account support
     #
     #####
-    #
-    # Low priority
-    # Sync Budgeted Amount in Joint Categories between all Budgets (If possible by date modified, or by highest number)
-    # Be able to mark other transactions as "JOINT" that are not part of a joint category with memos, adding them to Delta without category
-    # Detected edited transactions and only parse the difference
-    # Have a neater conf.txt file with more options like "Standard Transaction text", "Standard Delta Text", etc.
-    # Make a web platform instead of running locally
-    #
-    ####
 
 import urllib2
 import urllib
@@ -20,10 +13,6 @@ import json
 import os
 import sys
 from shutil import copyfile
-
-######################################
-# YNAB Related commands
-######################################
 
 # Grabs the API key string from key.txt. Creates a file if there is none.
 def getAPIKey():
@@ -66,19 +55,11 @@ def YNAB_ParseCache(param):
         data = json.load(f)
     return data
 
-######################################
-# Other useful functions
-######################################
-
 # Remove key from dictionary nondestructively
 def removekey(d, key):
     r = dict(d)
     del r[key]
     return r
-
-######################################
-# Server Request commands - Limited to 200 runs per hour (1 user = usually 1 run each)
-######################################
 
 # fetchData returns the data from an URL, but doesn't write cache
 xratemet = 0
@@ -125,10 +106,6 @@ def YNAB_Fetch(param):
     data = fetchData(url)
     return writeCache(data,param)
 
-######################################
-# Used mainly only by other functions
-######################################
-
 # Creates a backup of every .transactions file, which can be recovered if the POST doesn't go through, so that the server_knowledge is reset.
 # is run at the start of the script
 def backupTransactionsCache():
@@ -140,10 +117,7 @@ def backupTransactionsCache():
             dst = 'caches/'+file+'.backup'
             copyfile(src,dst)
 
-# Recovers the .transactions files back to the old version. This runs if a POST request fails (In sendBulkTransactions) (also stops the script)
-# This allows it to keep the server_knowledge if a transaction didn't go through.
-# I suppose on extremely rare occasions this could mean one user might get double posted, but I find that highly unlikely.
-# Atleast it's easier to spot a duplicate than a missing transaction.
+# Recovers the .transactions files back to the old version. This runs if a POST request fails
 def recoverTransactions():
     for file in os.listdir('caches/'):
         if file.endswith('.backup'):
@@ -221,10 +195,6 @@ def fetchCategoryIdByName(budget_id, name):
     for item in json['data']['budget']['categories']:
         if item['name'] == name:
             return item['id']
-
-######################################
-# Data related functions
-######################################
 
 # TO-DO
 def mergeDicts(old, changes):
@@ -437,9 +407,6 @@ def parseTransactions(jointTransactions):
                 output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
-######################################################
-# GLOBALS
-######################################################
 
 #ConfigFile
 if os.path.isfile('conf.txt') == False:
