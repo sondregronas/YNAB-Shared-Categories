@@ -208,12 +208,12 @@ def mergeDicts(old, changes):
             for i, d2 in enumerate(old['data']['budget']['accounts']):
                 if d1['id'] == d2['id']:
                     n = False
-                    print 'Old account ' + d1['name'] + ' updated.'
+                    print ('Old account ' + d1['name'] + ' updated.').encode('utf8')
                     old['data']['budget']['accounts'][i] = d1
                     break
             if n:
                 n = d1
-                print 'New account ' + d1['name'] + ' added.'
+                print ('New account ' + d1['name'] + ' added.').encode('utf8')
                 old['data']['budget']['accounts'].append(d1)
                 break
         # Categories
@@ -222,12 +222,12 @@ def mergeDicts(old, changes):
             for i, d2 in enumerate(old['data']['budget']['categories']):
                 if d1['id'] == d2['id']:
                     n = False
-                    print 'Old category ' + d1['name'] + ' updated'
+                    print ('Old category ' + d1['name'] + ' updated').encode('utf8')
                     old['data']['budget']['categories'][i] = d1
                     break
             if n:
                 n = d1
-                print 'New category ' + d1['name'] + ' added.'
+                print ('New category ' + d1['name'] + ' added.').encode('utf8')
                 old['data']['budget']['categories'].append(d1)
                 break
         # Server knowledge
@@ -434,7 +434,7 @@ def parseTransactions(jointTransactions):
                             'payee_name':'Deleted'})
                 output.extend(verifyTransaction(tr))
             else:
-                print 'Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']
+                print ('Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']).encode('utf8')
                 output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
@@ -476,6 +476,6 @@ AllSharedCategories = getAllSharedCategories()
 print 'All Joint Category IDs grabbed.'
 transactions = []
 for item in AllDeltaAccounts:
-    print 'Checking new transactions in account: ' + item['budget_name'] + '. ID: ' + item['budget_id']
+    print ('Checking new transactions in account: ' + item['budget_name'] + '. ID: ' + item['budget_id']).encode('utf8')
     transactions.extend(getNewJointTransactions(item['budget_id']))
 parseTransactions(transactions)
