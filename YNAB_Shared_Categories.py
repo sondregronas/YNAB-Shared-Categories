@@ -15,15 +15,18 @@ import sys
 from shutil import copyfile
 
 # Grabs the API key string from key.txt. Creates a file if there is none.
+APIKey = None
 def getAPIKey():
-    if os.path.isfile('key.txt'):
-        with open('key.txt', 'r') as key:
-            apikey = key.read().replace('\n','')
-    else:
-        with open('key.txt', 'w') as key:
-            key.write('<YOUR_API_KEY_HERE(https://app.youneedabudget.com/settings/developer)>')
-            sys.exit('File: key.txt was created. Edit this and add your own API-key')
-    return apikey
+    global APIKey
+    if APIKey == None:
+        if os.path.isfile('key.txt'):
+            with open('key.txt', 'r') as key:
+                APIKey = key.read().replace('\n','')
+        else:
+            with open('key.txt', 'w') as key:
+                key.write('<YOUR_API_KEY_HERE(https://app.youneedabudget.com/settings/developer)>')
+                sys.exit('File: key.txt was created. Edit this and add your own API-key')
+    return APIKey
 
 # Gets the file path for caches
 def getCachePath(param):
@@ -196,12 +199,35 @@ def fetchCategoryIdByName(budget_id, name):
         if item['name'] == name:
             return item['id']
 
-# TO-DO
+# Updates new Accounts and Categories dictionaries to the old dictionary
 def mergeDicts(old, changes):
-    d1 = old
-    d2 = changes
-    #d1 = update(d1,d2)
-    return d1
+    # Accounts
+    for d1 in changes['data']['budget']['accounts']:
+        n = True
+        for i, d2 in enumerate(old['data']['budget']['accounts']):
+            if d1['id'] == d2['id']:
+                n = False
+                print 'Old account ' + d1['name'] + ' updated.'
+                old['data']['budget']['accounts'][i] = d1
+        if n:
+            n = d1
+            print 'New account ' + d1['name'] + ' added.'
+            old['data']['budget']['accounts'].append(d1)
+    # Categories
+    for d1 in changes['data']['budget']['categories']:
+        n = True
+        for i, d2 in enumerate(old['data']['budget']['categories']):
+            if d1['id'] == d2['id']:
+                n = False
+                print 'Old category ' + d1['name'] + ' updated'
+                old['data']['budget']['categories'][i] = d1
+        if n:
+            n = d1
+            print 'New category ' + d1['name'] + ' added.'
+            old['data']['budget']['categories'].append(d1)
+    # Server knowledge
+    old['data']['server_knowledge'] = changes['data']['server_knowledge']
+    return old
 
 # Fetches new data & adds it to the cache
 def getBudgetUpdates(budget_id):
@@ -218,11 +244,6 @@ def getBudgetUpdates(budget_id):
     data = fetchData(url)
     data = mergeDicts(json,data)
     writeCache(data, str(budget_id))
-
-    # TEMPORARY FIX
-    print 'Running temporary fix - Uses more server requests (Max 200/hr)'
-    data = YNAB_Fetch(str(budget_id))
-    # TEMPORARY FIX
     return data
 
 # Checks if a transaction is in a shared category, and not in a delta account
