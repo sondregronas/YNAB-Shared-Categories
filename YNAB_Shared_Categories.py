@@ -165,9 +165,9 @@ def getAllDeltaAccounts():
         if acc != None and acc['deleted'] == False:
             print ('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id']).encode('utf8')
             acc.update({'budget_name':item['name'], 'budget_id':item['id']})
-            print ('Checking for updates in ' + item['name']).encode('utf8')
-            getBudgetUpdates(item['id'])
             output.append(acc)
+        print ('Checking for updates in ' + item['name']).encode('utf8')
+        getBudgetUpdates(item['id'])
     return output
 
 # Used by newTransactions parser to see if the new transaction is from a shared category
@@ -202,32 +202,38 @@ def fetchCategoryIdByName(budget_id, name):
 # Updates new Accounts and Categories dictionaries to the old dictionary
 def mergeDicts(old, changes):
     # Accounts
-    for d1 in changes['data']['budget']['accounts']:
-        n = True
-        for i, d2 in enumerate(old['data']['budget']['accounts']):
-            if d1['id'] == d2['id']:
-                n = False
-                print 'Old account ' + d1['name'] + ' updated.'
-                old['data']['budget']['accounts'][i] = d1
-        if n:
-            n = d1
-            print 'New account ' + d1['name'] + ' added.'
-            old['data']['budget']['accounts'].append(d1)
-    # Categories
-    for d1 in changes['data']['budget']['categories']:
-        n = True
-        for i, d2 in enumerate(old['data']['budget']['categories']):
-            if d1['id'] == d2['id']:
-                n = False
-                print 'Old category ' + d1['name'] + ' updated'
-                old['data']['budget']['categories'][i] = d1
-        if n:
-            n = d1
-            print 'New category ' + d1['name'] + ' added.'
-            old['data']['budget']['categories'].append(d1)
-    # Server knowledge
-    old['data']['server_knowledge'] = changes['data']['server_knowledge']
-    return old
+    if changes['data']['budget']['accounts'] != [] or changes['data']['budget']['categories'] != []:
+        for d1 in changes['data']['budget']['accounts']:
+            n = True
+            for i, d2 in enumerate(old['data']['budget']['accounts']):
+                if d1['id'] == d2['id']:
+                    n = False
+                    print 'Old account ' + d1['name'] + ' updated.'
+                    old['data']['budget']['accounts'][i] = d1
+                    break
+            if n:
+                n = d1
+                print 'New account ' + d1['name'] + ' added.'
+                old['data']['budget']['accounts'].append(d1)
+                break
+        # Categories
+        for d1 in changes['data']['budget']['categories']:
+            n = True
+            for i, d2 in enumerate(old['data']['budget']['categories']):
+                if d1['id'] == d2['id']:
+                    n = False
+                    print 'Old category ' + d1['name'] + ' updated'
+                    old['data']['budget']['categories'][i] = d1
+                    break
+            if n:
+                n = d1
+                print 'New category ' + d1['name'] + ' added.'
+                old['data']['budget']['categories'].append(d1)
+                break
+        # Server knowledge
+        old['data']['server_knowledge'] = changes['data']['server_knowledge']
+        return old
+    return False
 
 # Fetches new data & adds it to the cache
 def getBudgetUpdates(budget_id):
@@ -243,6 +249,8 @@ def getBudgetUpdates(budget_id):
     url = getURL(param)
     data = fetchData(url)
     data = mergeDicts(json,data)
+    if data == False:
+        return None
     writeCache(data, str(budget_id))
     return data
 
@@ -383,6 +391,7 @@ def verifyTransaction(tr):
                         if budgets['budget_id'] == delta['budget_id']:
                             targetaccount = delta['id']
                             targetaccountname = delta['name']
+                            break
                     targetcategoryid = categories['id']
                     targetcategoryname = categories['name']
                     targetbudget = budgets['budget_id']
@@ -407,6 +416,7 @@ def verifyTransaction(tr):
                     transactiondata.update ({'target_budget':targetbudget})
 
                     output.append(transactiondata) # For bulk transaction
+                    break
     return output
 
 # This currently does not handle edited transactions - not sure how to go about that
