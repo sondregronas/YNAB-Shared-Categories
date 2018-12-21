@@ -71,7 +71,7 @@ def fetchData(url):
     try:
         data = urllib2.urlopen(url)
     except urllib2.HTTPError, e:
-        print 'Recovering backed up transactions.'
+        print 'HTTPError. Recovering backed up transactions.'
         recoverTransactions()
         if e.code == 400:
             sys.exit('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
@@ -88,6 +88,10 @@ def fetchData(url):
         if e.code == 500:
             sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
         sys.exit(e) 
+    except urllib2.URLError, e:
+        print 'URL-ERROR. Recovering backed up transactions.'
+        recoverTransactions()
+        sys.exit(e)
 
     xrate = data.info().get('X-Rate-Limit')
     if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
@@ -345,9 +349,14 @@ def sendBulkTransactions(bulk):
             try: 
                 response = urllib2.urlopen(req)
             except urllib2.HTTPError as e:
+                print 'HTTPError. Recovering backed up transactions.'
                 recoverTransactions()
                 sys.exit(e.code)
                 sys.exit(e.read())
+            except urllib2.URLError, e:
+                print 'URL-ERROR. Recovering backed up transactions.'
+                recoverTransactions()
+                sys.exit(e)
             print response.read()
     else:
         print 'No transactions sent. Transactiondata should be [], = ' + str(bulk)
