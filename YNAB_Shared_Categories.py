@@ -12,6 +12,7 @@ import urllib
 import json
 import os
 import sys
+import time
 from shutil import copyfile
 
 # Grabs the API key string from key.txt. Creates a file if there is none.
@@ -64,40 +65,73 @@ def removekey(d, key):
     del r[key]
     return r
 
+def requestData(url, data, header):
+    i = 0
+    attempts = 10
+    while i < attempts:
+        i = i+1
+        try:
+            req = urllib2.Request(url, data, header)
+            break
+        except urllib2.HTTPError, e:
+            if i == attempts:
+                print 'HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                recoverTransactions()
+                sys.exit(e) 
+            print('HTTP Request Failed ' + str(i) + ' times.')
+        except urllib2.URLError, e:
+            if i == attempts:
+                print 'URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                recoverTransactions()
+                sys.exit(e)
+            print('URL Failed ' + str(i) + ' times.')
+        time.sleep(1)
+    return req
+
 # fetchData returns the data from an URL, but doesn't write cache
 xratemet = 0
 def fetchData(url):
     global xratemet
-    try:
-        data = urllib2.urlopen(url)
-    except urllib2.HTTPError, e:
-        print 'HTTPError. Recovering backed up transactions.'
-        recoverTransactions()
-        if e.code == 400:
-            sys.exit('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
-        if e.code == 401:
-            sys.exit('HTTP Error 401: Missing/Invalid/Revoked/Expired access token')
-        if e.code == 403:
-            sys.exit('HTTP Error 403: YNAB subscription expired')
-        if e.code == 404:
-            sys.exit('HTTP Error 404: Not found, Wrong parameter given')
-        if e.code == 409:
-            sys.exit('HTTP Error 409: Conflicts with an existing resource')
-        if e.code == 429:
-            sys.exit('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
-        if e.code == 500:
-            sys.exit('HTTP Error 500: Internal Server Error, unexpected error')
-        sys.exit(e) 
-    except urllib2.URLError, e:
-        print 'URL-ERROR. Recovering backed up transactions.'
-        recoverTransactions()
-        sys.exit(e)
+    i = 0
+    attempts = 10
+    while i < attempts:
+        i = i+1
+        try:
+            data = urllib2.urlopen(url)
+            break
+        except urllib2.HTTPError, e:
+            if e.code == 400:
+                f = ('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
+            if e.code == 401:
+                f = ('HTTP Error 401: Missing/Invalid/Revoked/Expired access token')
+            if e.code == 403:
+                f = ('HTTP Error 403: YNAB subscription expired')
+            if e.code == 404:
+                f = ('HTTP Error 404: Not found, Wrong parameter given')
+            if e.code == 409:
+                f = ('HTTP Error 409: Conflicts with an existing resource')
+            if e.code == 429:
+                f = ('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
+            if e.code == 500:
+                f = ('HTTP Error 500: Internal Server Error, unexpected error')
+            if i == attempts:
+                print 'HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                recoverTransactions()
+                sys.exit(f) 
+            print('HTTP Request Failed ' + str(i) + ' times.')
+        except urllib2.URLError, e:
+            if i == attempts:
+                print 'URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                recoverTransactions()
+                sys.exit(e)
+            print('URL Failed ' + str(i) + ' times.')
+        time.sleep(1)
 
     xrate = data.info().get('X-Rate-Limit')
     if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
         sys.exit('Surpassed X-Rate-Limit Safety treshold ' + xrate +', will run once more is available')
     xratemet += 1
-    return json.load(data)
+    return data
 
 def writeCache(data, param):
     path = getCachePath(param)
@@ -110,7 +144,7 @@ def writeCache(data, param):
 # Fetches data from the server and writes it to cache
 def YNAB_Fetch(param):
     url = getURL(param)
-    data = fetchData(url)
+    data = json.load(fetchData(url))
     return writeCache(data,param)
 
 # Creates a backup of every .transactions file, which can be recovered if the POST doesn't go through, so that the server_knowledge is reset.
@@ -244,15 +278,15 @@ def getBudgetUpdates(budget_id):
     param = budget_id+'?last_knowledge_of_server='
     path = getCachePath(param)
     if os.path.isfile(path):
-        json = YNAB(param)
-        x = json['data']['server_knowledge']
+        main = YNAB(param)
+        x = main['data']['server_knowledge']
     else: 
-        json = YNAB(budget_id)
-        x = json['data']['server_knowledge']
+        main = YNAB(budget_id)
+        x = main['data']['server_knowledge']
     param = param + str(x)
     url = getURL(param)
-    data = fetchData(url)
-    data = mergeDicts(json,data)
+    data = json.load(fetchData(url))
+    data = mergeDicts(main,data)
     if data == False:
         return None
     writeCache(data, str(budget_id))
@@ -345,18 +379,10 @@ def sendBulkTransactions(bulk):
             targetbudget = str(tr[0]['target_budget'])
             url = getURL(targetbudget+'/transactions/bulk')
             data = json.dumps({'transactions':transactiondata})
-            req = urllib2.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': len(data)})
-            try: 
-                response = urllib2.urlopen(req)
-            except urllib2.HTTPError as e:
-                print 'HTTPError. Recovering backed up transactions.'
-                recoverTransactions()
-                sys.exit(e.code)
-                sys.exit(e.read())
-            except urllib2.URLError, e:
-                print 'URL-ERROR. Recovering backed up transactions.'
-                recoverTransactions()
-                sys.exit(e)
+
+            req = requestData(url, data, {'Content-Type': 'application/json', 'Content-Length': len(data)})
+            response = fetchData(req)
+
             print response.read()
     else:
         print 'No transactions sent. Transactiondata should be [], = ' + str(bulk)
