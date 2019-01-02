@@ -9,6 +9,7 @@
 
 import urllib2
 import urllib
+import httplib
 import json
 import os
 import sys
@@ -101,17 +102,17 @@ def fetchData(url):
             break
         except urllib2.HTTPError, e:
             if e.code == 400:
-                f = ('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
+                sys.exit('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
             if e.code == 401:
-                f = ('HTTP Error 401: Missing/Invalid/Revoked/Expired access token')
+                sys.exit('HTTP Error 401: Missing/Invalid/Revoked/Expired access token')
             if e.code == 403:
-                f = ('HTTP Error 403: YNAB subscription expired')
+                sys.exit('HTTP Error 403: YNAB subscription expired')
             if e.code == 404:
-                f = ('HTTP Error 404: Not found, Wrong parameter given')
+                sys.exit('HTTP Error 404: Not found, Wrong parameter given')
             if e.code == 409:
-                f = ('HTTP Error 409: Conflicts with an existing resource')
+                sys.exit('HTTP Error 409: Conflicts with an existing resource')
             if e.code == 429:
-                f = ('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
+                sys.exit('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
             if e.code == 500:
                 f = ('HTTP Error 500: Internal Server Error, unexpected error')
             if i == attempts:
@@ -125,6 +126,11 @@ def fetchData(url):
                 recoverTransactions()
                 sys.exit(e)
             print('URL Failed ' + str(i) + ' times.')
+        except httplib.BadStatusLine as e:
+            if i == attempts:
+                print 'Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                recoverTransactions()
+                sys.exit(e)
         time.sleep(1)
 
     xrate = data.info().get('X-Rate-Limit')
@@ -158,13 +164,18 @@ def backupTransactionsCache():
             dst = 'caches/'+file+'.backup'
             copyfile(src,dst)
 
+# If Recover = false then no recovery of transactions is made. Set to False after .queue is made
+recover = True
 # Recovers the .transactions files back to the old version. This runs if a POST request fails
 def recoverTransactions():
-    for file in os.listdir('caches/'):
-        if file.endswith('.backup'):
-            src = 'caches/'+file
-            dst = ('caches/'+file).split('.backup')[0]
-            copyfile(src,dst)
+    if recover:
+        for file in os.listdir('caches/'):
+            if file.endswith('.backup'):
+                src = 'caches/'+file
+                dst = ('caches/'+file).split('.backup')[0]
+                copyfile(src,dst)
+    else:
+        print 'No recovery made due to queued up transactions.'
 
 # Used by getAllSharedCategories
 # Searches every category for the string 'CombinedAffix' in notes, 
@@ -198,14 +209,17 @@ def getAllDeltaAccounts():
     output = []
     # Grabbing all Delta Account IDs
     for item in MasterJSON['data']['budgets']:
+        if os.path.isfile(str('caches/' + item['id'] + '.cache')) == True:
+            print ('Checking for updates in ' + item['name']).encode('utf8')
+            getBudgetUpdates(item['id'])
+
+        print ('Checking for Delta Accounts in ' + item['name']).encode('utf8')
         json = YNAB(item['id'])
         acc = findAccountByNote(modNoteDeltaAccount, json)
         if acc != None and acc['deleted'] == False:
             print ('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id']).encode('utf8')
             acc.update({'budget_name':item['name'], 'budget_id':item['id']})
             output.append(acc)
-        print ('Checking for updates in ' + item['name']).encode('utf8')
-        getBudgetUpdates(item['id'])
     return output
 
 # Used by newTransactions parser to see if the new transaction is from a shared category
@@ -364,29 +378,47 @@ def transactionSorter(transactions, account):
 
 # Sends all parsed transactions to the correspdoing budget_id/transactions/bulk
 def sendBulkTransactions(bulk):
-    # Only run if there are new transactions
-    if bulk != []:
-        # Sort by budget - to prevent spamming the server with requests
-        for acc in AllDeltaAccounts:
-            tr = []
-            transactiondata = []
-            tr = transactionSorter(bulk, acc)
+    global recover
+    send = []
+    # Sort by budget - to prevent spamming the server with requests
+    for acc in AllDeltaAccounts:
+        tr = []
+        transactiondata = []
+        tr = transactionSorter(bulk, acc)
 
+        # If there are transactions queued up, include them
+        path = str('caches/' + acc['budget_id'] + '.queue')
+        if os.path.exists(path):
+            with open(path, 'r') as cache:
+                tr.extend(json.load(cache))
+
+        if tr != []:
             for i in tr:
                 data = removekey(i,'target_budget')
                 transactiondata.append(data)
+
+            # Cache transactions to queue in the event of failure
+            path = str('caches/' + tr[0]['target_budget'] + '.queue')
+            with open(path, 'w') as cache:
+                json.dump(tr,cache)
 
             targetbudget = str(tr[0]['target_budget'])
             url = getURL(targetbudget+'/transactions/bulk')
             data = json.dumps({'transactions':transactiondata})
 
-            req = requestData(url, data, {'Content-Type': 'application/json', 'Content-Length': len(data)})
-            response = fetchData(req)
+            send.append({'url':url, 'data':data, 'target':targetbudget})
 
-            print response.read()
-    else:
-        print 'No transactions sent. Transactiondata should be [], = ' + str(bulk)
-        recoverTransactions()
+    recover = False
+    for i in send:
+        req = requestData(i['url'], i['data'], {'Content-Type': 'application/json', 'Content-Length': len(i['data'])})
+        response = fetchData(req)
+        print response.read()
+
+        # Remove queue on successful run
+        path = str('caches/' + i['target'] + '.queue')
+        if os.path.exists(path):
+            os.remove(path)
+
 
 # parseDeltas prepares the delta transaction to be sent out (Cleaning the old transaction data and replacing it with the target info)
 def parseDeltas(transaction):
@@ -502,6 +534,7 @@ with open('conf.txt', 'r') as f:
 CombinedAffix = modSeparatorAffix+modNoteDeltaCategory
 
 # SCRIPT START
+
 backupTransactionsCache()
 MasterJSON = YNAB_Fetch('')
 print 'Grabbed MasterJSON'
@@ -512,5 +545,5 @@ print 'All Joint Category IDs grabbed.'
 transactions = []
 for item in AllDeltaAccounts:
     print ('Checking new transactions in account: ' + item['budget_name'] + '. ID: ' + item['budget_id']).encode('utf8')
-    transactions.extend(getNewJointTransactions(item['budget_id']))
+    transactions.extend(getNewJointTransactions(item['budget_id']))    
 parseTransactions(transactions)
