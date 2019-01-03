@@ -386,13 +386,12 @@ def sendBulkTransactions(bulk):
         transactiondata = []
         tr = transactionSorter(bulk, acc)
 
-        # If there are transactions queued up, include them
-        path = str('caches/' + acc['budget_id'] + '.queue')
-        if os.path.exists(path):
-            with open(path, 'r') as cache:
-                tr.extend(json.load(cache))
-
         if tr != []:
+            # If there are transactions queued up, include them
+            path = str('caches/' + tr[0]['target_budget'] + '.queue')
+            if os.path.exists(path):
+                with open(path, 'r') as cache:
+                    tr.extend(json.load(cache))
             for i in tr:
                 data = removekey(i,'target_budget')
                 transactiondata.append(data)
