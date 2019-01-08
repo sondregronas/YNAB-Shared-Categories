@@ -514,7 +514,7 @@ def createConfig(path):
     config.set('User', 'Category-Affix', '<!>')
 
     config.add_section('Options')
-    config.set('Options', 'Detect-Deleted', '0')
+    config.set('Options', 'Detect-Deleted', '1')
 
     config.add_section('Meta')
     config.set('Meta', 'X-Rate-Treshold', 20)
@@ -538,6 +538,7 @@ config = ConfigParser.SafeConfigParser()
 config.read('YNAB_Shared_Categories.cfg.default')
 config.read('YNAB_Shared_Categories.cfg')
 
+# Check if the access token value was changed
 if 'youneedabudget' in config.get('Key', 'Access-Token'):
         sys.exit('Access Token not yet added to YNAB_Shared_Categories.cfg.')
 
