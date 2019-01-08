@@ -15,20 +15,7 @@ import os
 import sys
 import time
 from shutil import copyfile
-
-# Grabs the API key string from key.txt. Creates a file if there is none.
-APIKey = None
-def getAPIKey():
-    global APIKey
-    if APIKey == None:
-        if os.path.isfile('key.txt'):
-            with open('key.txt', 'r') as key:
-                APIKey = key.read().replace('\n','')
-        else:
-            with open('key.txt', 'w') as key:
-                key.write('<YOUR_API_KEY_HERE(https://app.youneedabudget.com/settings/developer)>')
-                sys.exit('File: key.txt was created. Edit this and add your own API-key')
-    return APIKey
+import configparser
 
 # Gets the file path for caches
 def getCachePath(param):
@@ -43,8 +30,8 @@ def getCachePath(param):
 # Delta commands have a slightly different URL, this one returns the correct one
 def getURL(param):  
     if '?last_knowledge_of_server=' in param:
-        return 'https://api.youneedabudget.com/v1/budgets/' + str(param) + '&access_token=' + str(getAPIKey())
-    return 'https://api.youneedabudget.com/v1/budgets/' + str(param) + '?access_token=' + str(getAPIKey())
+        return 'https://api.youneedabudget.com/v1/budgets/' + str(param) + '&access_token=' + str(AccessToken)
+    return 'https://api.youneedabudget.com/v1/budgets/' + str(param) + '?access_token=' + str(AccessToken)
 
 # Checks the cache data. If there is no no cache it will call YNAB_Fetch for first time launch
 def YNAB(param):
@@ -57,7 +44,13 @@ def YNAB(param):
 def YNAB_ParseCache(param):
     path = getCachePath(param)
     with open(path) as f:
-        data = json.load(f)
+        try:
+            data = json.load(f)
+        except ValueError as e:
+            x = (path.split('/')[1]).split('.')[0]
+            print 'Corrupt file ' + path + '. Fetching new from YNAB.'
+            data = YNAB_Fetch(x)
+            writeCache(data,x)
     return data
 
 # Remove key from dictionary nondestructively
@@ -79,13 +72,13 @@ def requestData(url, data, header):
                 print 'HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
                 recoverTransactions()
                 sys.exit(e) 
-            print('HTTP Request Failed ' + str(i) + ' times.')
+            print('HTTP Request '+e+' Failed ' + str(i) + ' times.')
         except urllib2.URLError, e:
             if i == attempts:
                 print 'URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
                 recoverTransactions()
                 sys.exit(e)
-            print('URL Failed ' + str(i) + ' times.')
+            print('URL Failed '+e+' ' + str(i) + ' times.')
         time.sleep(1)
     return req
 
@@ -102,17 +95,22 @@ def fetchData(url):
             break
         except urllib2.HTTPError, e:
             if e.code == 400:
-                sys.exit('HTTP Error 400: Bad request, did you add a valid API key to key.txt?')
+                i = attempts
+                f = ('HTTP Error 400: Bad request, did you add a valid Access Token to the config file?')
             if e.code == 401:
-                sys.exit('HTTP Error 401: Missing/Invalid/Revoked/Expired access token')
+                i = attempts
+                f = ('HTTP Error 401: Missing/Invalid/Revoked/Expired access token')
             if e.code == 403:
-                sys.exit('HTTP Error 403: YNAB subscription expired')
+                i = attempts
+                f = ('HTTP Error 403: YNAB subscription expired')
             if e.code == 404:
-                sys.exit('HTTP Error 404: Not found, Wrong parameter given')
+                i = attempts
+                f = ('HTTP Error 404: Not found, Wrong parameter given')
             if e.code == 409:
-                sys.exit('HTTP Error 409: Conflicts with an existing resource')
+                f = ('HTTP Error 409: Conflicts with an existing resource')
             if e.code == 429:
-                sys.exit('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
+                i = attempts
+                f = ('HTTP Error 429: Too many requests, need to wait between 0-59 minutes to try again :(')
             if e.code == 500:
                 f = ('HTTP Error 500: Internal Server Error, unexpected error')
             if i == attempts:
@@ -134,7 +132,7 @@ def fetchData(url):
         time.sleep(1)
 
     xrate = data.info().get('X-Rate-Limit')
-    if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(xrate_safetytreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
+    if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(XRateTreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
         sys.exit('Surpassed X-Rate-Limit Safety treshold ' + xrate +', will run once more is available')
     xratemet += 1
     return data
@@ -185,7 +183,7 @@ def searchAllSharedCategories(syntax, json): # Might be redundant with caching?
     for item in json['data']['budget']['categories']:
         if item['note'] != None:
             if str(syntax) in str(item['note']):
-                note_id = item['note'].split(modSeparatorAffix)[1]
+                note_id = item['note'].split(CategoryAffix)[1]
                 item = removekey(item, 'note')
                 item.update({'note':note_id})
                 output.append(item)
@@ -215,7 +213,7 @@ def getAllDeltaAccounts():
 
         print ('Checking for Delta Accounts in ' + item['name']).encode('utf8')
         json = YNAB(item['id'])
-        acc = findAccountByNote(modNoteDeltaAccount, json)
+        acc = findAccountByNote(AccountSyntax, json)
         if acc != None and acc['deleted'] == False:
             print ('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id']).encode('utf8')
             acc.update({'budget_name':item['name'], 'budget_id':item['id']})
@@ -392,14 +390,14 @@ def sendBulkTransactions(bulk):
             if os.path.exists(path):
                 with open(path, 'r') as cache:
                     tr.extend(json.load(cache))
+
+            # Cache all transactions to queue in the event of failure
+            with open(path, 'w') as cache:
+                json.dump(tr,cache)
+            
             for i in tr:
                 data = removekey(i,'target_budget')
                 transactiondata.append(data)
-
-            # Cache transactions to queue in the event of failure
-            path = str('caches/' + tr[0]['target_budget'] + '.queue')
-            with open(path, 'w') as cache:
-                json.dump(tr,cache)
 
             targetbudget = str(tr[0]['target_budget'])
             url = getURL(targetbudget+'/transactions/bulk')
@@ -504,36 +502,61 @@ def parseTransactions(jointTransactions):
                 output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
+def createConfig(path):
+    config = configparser.RawConfigParser()
 
-#ConfigFile
-if os.path.isfile('conf.txt') == False:
-    with open('conf.txt', 'w') as f:
-        f.write('# You can edit the modifier and affix to whatever you would like.\n')
-        f.write('# Example Delta Account Note: "My delta account! (Shared_Delta)"\n')
-        f.write('# Example Category Note: Try to stay within budget! <!>Shared_ID: 01<!>\n')
-        f.write('# VALUES:\n')
-        f.write('Shared Account Note=Shared_Delta\n')
-        f.write('Shared Category Note Modifier=Shared_ID:\n')
-        f.write('Shared Category Note Affix=<!>\n')
-        f.write('Detect Deleted transactions=1\n')
-        f.write('X-Rate-Limit Safe Treshold=20')
-with open('conf.txt', 'r') as f:
-    f.readline()
-    f.readline()
-    f.readline()
-    f.readline()
-    modNoteDeltaAccount = f.readline().split('=')[1].replace('\n','')
-    modNoteDeltaCategory = f.readline().split('=')[1].replace('\n','')
-    modSeparatorAffix = f.readline().split('=')[1].replace('\n','')
-    if f.readline().split('=')[1].replace('\n','') == '1':
-        IncludeDeleted = True
-    else:
-        IncludeDeleted = False
-    xrate_safetytreshold = f.readline().split('=')[1].replace('\n','')
-CombinedAffix = modSeparatorAffix+modNoteDeltaCategory
+    config.add_section('Key')
+    config.set('Key', 'Access-Token', 'YOUR_ACCESS_TOKEN_HERE(https://app.youneedabudget.com/settings/developer)')
 
+    config.add_section('User')
+    config.set('User', 'Account-Syntax', 'Shared_Delta')
+    config.set('User', 'Category-Syntax', 'Shared_ID:')
+    config.set('User', 'Category-Affix', '<!>')
+
+    config.add_section('Options')
+    config.set('Options', 'Detect-Deleted', '0')
+
+    config.add_section('Meta')
+    config.set('Meta', 'X-Rate-Treshold', 20)
+
+    with open(path, 'wb') as configfile:
+        config.write(configfile)
+
+def getConfig(path):
+    # Creates a config file if it doesn't exist
+    if not os.path.exists(path):
+        print 'Creating ' + path
+        createConfig(path)
+
+    config = configparser.ConfigParser()
+    config.read(path)
+
+    return config
+
+# Config
+config = getConfig('YNAB_Shared_Categories.cfg')
+
+if 'youneedabudget' in config.get('Key', 'Access-Token'):
+        sys.exit('Access Token not yet added to YNAB_Shared_Categories.cfg.')
+
+# Key
+AccessToken     = config.get('Key', 'Access-Token')
+
+# User
+AccountSyntax   = config.get('User', 'Account-Syntax', fallback='Shared_Delta')
+CategorySyntax  = config.get('User', 'Category-Syntax', fallback='Shared_ID:')
+CategoryAffix   = config.get('User', 'Category-Affix', fallback='<!>')
+CombinedAffix   = CategoryAffix + CategorySyntax
+
+# Options
+IncludeDeleted  = config.getboolean('Options', 'Detect-Deleted', fallback='yes')
+
+# Meta
+XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold', fallback=20)
+
+##############
 # SCRIPT START
-
+##############
 backupTransactionsCache()
 MasterJSON = YNAB_Fetch('')
 print 'Grabbed MasterJSON'
