@@ -15,7 +15,7 @@ import os
 import sys
 import time
 from shutil import copyfile
-import configparser
+import ConfigParser
 
 # Gets the file path for caches
 def getCachePath(param):
@@ -503,7 +503,7 @@ def parseTransactions(jointTransactions):
     sendBulkTransactions(output)
 
 def createConfig(path):
-    config = configparser.RawConfigParser()
+    config = ConfigParser.RawConfigParser()
 
     config.add_section('Key')
     config.set('Key', 'Access-Token', 'YOUR_ACCESS_TOKEN_HERE(https://app.youneedabudget.com/settings/developer)')
@@ -521,20 +521,22 @@ def createConfig(path):
 
     with open(path, 'wb') as configfile:
         config.write(configfile)
-
-def getConfig(path):
-    # Creates a config file if it doesn't exist
-    if not os.path.exists(path):
-        print 'Creating ' + path
-        createConfig(path)
-
-    config = configparser.ConfigParser()
-    config.read(path)
-
     return config
 
 # Config
-config = getConfig('YNAB_Shared_Categories.cfg')
+# Creates a config file if it doesn't exist
+if not os.path.exists('YNAB_Shared_Categories.cfg'):
+        print 'Creating YNAB_Shared_Categories.cfg'
+        createConfig('YNAB_Shared_Categories.cfg')
+        sys.exit('YNAB_Shared_Categories.cfg was created. Add your Access Token to this file')
+
+# Create a default config file for fallback values
+createConfig('YNAB_Shared_Categories.cfg.default')
+
+# Parse config
+config = ConfigParser.SafeConfigParser()
+config.read('YNAB_Shared_Categories.cfg.default')
+config.read('YNAB_Shared_Categories.cfg')
 
 if 'youneedabudget' in config.get('Key', 'Access-Token'):
         sys.exit('Access Token not yet added to YNAB_Shared_Categories.cfg.')
@@ -543,16 +545,16 @@ if 'youneedabudget' in config.get('Key', 'Access-Token'):
 AccessToken     = config.get('Key', 'Access-Token')
 
 # User
-AccountSyntax   = config.get('User', 'Account-Syntax', fallback='Shared_Delta')
-CategorySyntax  = config.get('User', 'Category-Syntax', fallback='Shared_ID:')
-CategoryAffix   = config.get('User', 'Category-Affix', fallback='<!>')
+AccountSyntax   = config.get('User', 'Account-Syntax')
+CategorySyntax  = config.get('User', 'Category-Syntax')
+CategoryAffix   = config.get('User', 'Category-Affix')
 CombinedAffix   = CategoryAffix + CategorySyntax
 
 # Options
-IncludeDeleted  = config.getboolean('Options', 'Detect-Deleted', fallback='yes')
+IncludeDeleted  = config.getboolean('Options', 'Detect-Deleted')
 
 # Meta
-XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold', fallback=20)
+XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 
 ##############
 # SCRIPT START
