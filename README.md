@@ -3,11 +3,11 @@ Created with Python 2.7.13 - https://www.python.org/downloads/release/python-271
 <br>
 
 ## Usage
-To use this application, install Python from above and run the script once, and edit (alternatively create) the key.txt with your own access token from https://app.youneedabudget.com/settings/developer
+To use this application, install Python from above and run the script once. The file 'YNAB_Shared_Categories.cfg' will be created in the same directory. Edit this using a text editor and add your own access-token from: https://app.youneedabudget.com/settings/developer
 
-After you've added the Shared Delta Accounts and categories as described below, run it again to create initial caches (A /caches/ folder should appear).
+After you've added the Shared Delta Accounts and categories as described below, run it again to create initial caches (A caches/ folder should appear). If you run into errors, try creating the caches folder manually.
 
-And you're done. Now everytime you want to synchronize the transactions run it again. I'm not sure how to automate the process on Windows/Mac, but I'll eventually try and set something up using a website if I can.
+And you're done. Now everytime you want to synchronize the transactions run it again. I'll eventually try and set something up using a website if I can.
 
 #### Budgets
 In the budgets you wish to share categories with, create a checking account and name it Delta, or somethinge else. 
@@ -25,15 +25,18 @@ You can also use letters, words or symbols for your ID, as long as the note affi
 ## Installation (Raspberry Pi)
 Just thought I'd add this here if people want to have it running for themselves while I try to figure out how to add it on a website
 ###### Getting the script
+EDIT: Currently making some changes to the setup, so the steps may not be correct. <br>
 1. Open Terminal on the Raspberry or access it using SSH<br>
 2. Install git ```sudo apt-get install git```<br>
 3. (Optional) Create a directory ```mkdir python_scripts``` and enter the directory ```cd python_scripts```<br>
 4. Run the command: ```sudo git clone https://github.com/sondregronas/YNAB-Shared-Categories/```<br>
 5. A directory "YNAB-Shared-Categories" was now added to this folder<br>
-6. Copy in your access-token to a file named key.txt with ```cd /YNAB-Shared-Categories/ && sudo nano key.txt```<br>
-7. Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm.<br>
-8. Create a caches folder: ```sudo mkdir caches```
-9. Run it once to create initial caches, it will only handle transactions after the initial run. ```sudo python /YNAB-Shared-Categories/YNAB-Shared-Categories.py```<br>
+6. Enter the directory by using ```cd YNAB-Shared-Categories```<br>
+7. Create a caches folder: ```sudo mkdir caches```<br>
+8. Run it once to create the initial config file. ```sudo python /YNAB-Shared-Categories/YNAB-Shared-Categories.py```<br>
+9. Copy in your access-token to the config file named YNAB_Shared_Categories.cfg, where it says access-token with ```sudo nano key.txt```<br>
+10. Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm.<br>
+11. Run the script again to create initial caches. <br>
 Now everytime you run the script it will check for new transactions and send them to every shared account.<br>
 
 ###### Automate the script
@@ -46,18 +49,12 @@ We can use crontab to automatically run the script <br>
 
 ###### Update the git
 To update the git simply go to the directory ```cd python_scripts/YNAB-Shared-Categories/``` and run: ```sudo git pull```<br>
-It may also be necessary to remove conf.txt if the configuration handler was changed. Run ```sudo rm conf.txt``` I'll fix this later so that this won't be necessary.
 
 ###### Clear cache
 If you need to clear the cache you can do so by running ```sudo rm -r caches/``` in the script directory.
 
 ## Configuration
-If you want some of the syntaxes, do so in the conf.txt file.
-> Shared Account Note (Shared_Delta) is required but can be set to whatever you'd like <br>
-> Shared Category Note Modifier (Shared_ID:) is optional and can be set to whatever. <br>
-> Shared Category Note Affix (<!>) (This IS required and but be set to whatever you'd like. Please put this on both sides of the ID <br>
-> Detect Deleted transactions (1) determines whether or not the script should handle deleted transactions (Same as a regular transaction but with negative amount) (1 = True). <br>
-> X-Rate-Limit Safe Treshold (20) gives the script some headroom when it comes to the limited amount of responses you can throw to the YNAB server. If you run the script too frequently you might hit the ceiling before the script finishes. This allows the script to run only if it has more than 20 requests left to send. (You should have atleast 5 per user) <br>
+EDIT: Added a new YNAB_Shared_Categories.cfg file using the ConfigParser module. I will update this soon.
 
 ## Status
 The application works, but:
