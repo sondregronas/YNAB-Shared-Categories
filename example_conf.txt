@@ -1,9 +1,0 @@
-# You can edit the modifier and affix to whatever you would like.
-# Example Delta Account Note: "My delta account! (Shared_Delta)"
-# Example Category Note: Try to stay within budget! <!>Shared_ID: 01<!>
-# VALUES:
-Shared Account Note=Shared_Delta
-Shared Category Note Modifier=Shared_ID:
-Shared Category Note Affix=<!>
-Detect Deleted transactions=1
-X-Rate-Limit Safe Treshold=20
