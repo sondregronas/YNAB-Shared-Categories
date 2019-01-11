@@ -519,8 +519,9 @@ def createConfig(path):
     config.add_section('Meta')
     config.set('Meta', 'X-Rate-Treshold', 20)
 
-    with open(path, 'wb') as configfile:
-        config.write(configfile)
+    if path != '':
+        with open(path, 'wb') as configfile:
+            config.write(configfile)
     return config
 
 # Config
@@ -530,17 +531,16 @@ if not os.path.exists('YNAB_Shared_Categories.cfg'):
         createConfig('YNAB_Shared_Categories.cfg')
         sys.exit('YNAB_Shared_Categories.cfg was created. Add your Access Token to this file')
 
-# Create a default config file for fallback values
-createConfig('YNAB_Shared_Categories.cfg.default')
-
 # Parse config
 config = ConfigParser.SafeConfigParser()
+# Make sure there are fallback values
+config = createConfig('')
 config.read('YNAB_Shared_Categories.cfg.default')
 config.read('YNAB_Shared_Categories.cfg')
 
 # Check if the access token value was changed
 if 'youneedabudget' in config.get('Key', 'Access-Token'):
-        sys.exit('Access Token not yet added to YNAB_Shared_Categories.cfg.')
+        sys.exit('Access Token needs to be added in YNAB_Shared_Categories.cfg.')
 
 # Key
 AccessToken     = config.get('Key', 'Access-Token')
