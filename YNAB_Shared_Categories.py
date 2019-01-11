@@ -535,7 +535,6 @@ if not os.path.exists('YNAB_Shared_Categories.cfg'):
 config = ConfigParser.SafeConfigParser()
 # Make sure there are fallback values
 config = createConfig('')
-config.read('YNAB_Shared_Categories.cfg.default')
 config.read('YNAB_Shared_Categories.cfg')
 
 # Check if the access token value was changed
