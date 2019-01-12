@@ -149,7 +149,37 @@ def writeCache(data, param):
 def YNAB_Fetch(param):
     url = getURL(param)
     data = json.load(fetchData(url))
+    if param == '':
+        return data
     return writeCache(data,param)
+
+def deleteBudgetCache(id):
+    a = 'caches/' + id + '.cache'
+    b = 'caches/' + id + '.transactions'
+    c = 'caches/' + id + '.transactions.backup'
+    d = 'caches/' + id + '.queue'
+    if os.path.exists(a):
+        os.remove(a)
+    if os.path.exists(b):
+        os.remove(b)
+    if os.path.exists(c):
+        os.remove(c)
+    if os.path.exists(d):
+        os.remove(d)
+
+# Detect deleted budgets and remove their associated caches
+def removeDeletedBudgets():
+    for file in os.listdir('caches/'):
+        if file.endswith('.cache'):
+            x = True
+            for i in MasterJSON['data']['budgets']:
+                if file.split('.')[0] == i['id']:
+                    x = False
+                    # Cache is correct
+                    break
+            if x == True:
+                print 'Budget ' + file.split('.')[0] + ' is no longer in MasterJSON. Deleting'
+                deleteBudgetCache(file.split('.')[0])
 
 # Creates a backup of every .transactions file, which can be recovered if the POST doesn't go through, so that the server_knowledge is reset.
 # is run at the start of the script
@@ -252,8 +282,13 @@ def fetchCategoryIdByName(budget_id, name):
 # Updates new Accounts and Categories dictionaries to the old dictionary
 def mergeDicts(old, changes):
     # Accounts
-    if changes['data']['budget']['accounts'] != [] or changes['data']['budget']['categories'] != []:
-        for d1 in changes['data']['budget']['accounts']:
+    a = changes['data']['budget']['accounts']
+    b = changes['data']['budget']['categories']
+    c = changes['data']['budget']['transactions']
+    d = changes['data']['budget']['subtransactions']
+    if a != [] or b != [] or c != [] or d != []:
+        # Accounts
+        for d1 in a:
             n = True
             for i, d2 in enumerate(old['data']['budget']['accounts']):
                 if d1['id'] == d2['id']:
@@ -267,7 +302,7 @@ def mergeDicts(old, changes):
                 old['data']['budget']['accounts'].append(d1)
                 break
         # Categories
-        for d1 in changes['data']['budget']['categories']:
+        for d1 in b:
             n = True
             for i, d2 in enumerate(old['data']['budget']['categories']):
                 if d1['id'] == d2['id']:
@@ -279,6 +314,34 @@ def mergeDicts(old, changes):
                 n = d1
                 print ('New category ' + d1['name'] + ' added.').encode('utf8')
                 old['data']['budget']['categories'].append(d1)
+                break
+        # Transactions
+        for d1 in c:
+            n = True
+            for i, d2 in enumerate(old['data']['budget']['transactions']):
+                if d1['id'] == d2['id']:
+                    n = False
+                    print ('Old transaction ' + d1['id'] + ' updated').encode('utf8')
+                    old['data']['budget']['transactions'][i] = d1
+                    break
+            if n:
+                n = d1
+                print ('New transaction ' + d1['id'] + ' added.').encode('utf8')
+                old['data']['budget']['transactions'].append(d1)
+                break
+        # Subtransactions
+        for d1 in d:
+            n = True
+            for i, d2 in enumerate(old['data']['budget']['subtransactions']):
+                if d1['id'] == d2['id']:
+                    n = False
+                    print ('Old subtransaction ' + d1['id'] + ' updated').encode('utf8')
+                    old['data']['budget']['subtransactions'][i] = d1
+                    break
+            if n:
+                n = d1
+                print ('New subtransaction ' + d1['id'] + ' added.').encode('utf8')
+                old['data']['budget']['subtransactions'].append(d1)
                 break
         # Server knowledge
         old['data']['server_knowledge'] = changes['data']['server_knowledge']
@@ -539,7 +602,7 @@ config.read('YNAB_Shared_Categories.cfg')
 
 # Check if the access token value was changed
 if 'youneedabudget' in config.get('Key', 'Access-Token'):
-        sys.exit('Access Token needs to be added in YNAB_Shared_Categories.cfg.')
+    sys.exit('Access Token needs to be added in YNAB_Shared_Categories.cfg.')
 
 # Key
 AccessToken     = config.get('Key', 'Access-Token')
@@ -561,6 +624,7 @@ XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 ##############
 backupTransactionsCache()
 MasterJSON = YNAB_Fetch('')
+removeDeletedBudgets()
 print 'Grabbed MasterJSON'
 AllDeltaAccounts = getAllDeltaAccounts()
 print 'All Joint Account IDs grabbed.'
@@ -571,3 +635,4 @@ for item in AllDeltaAccounts:
     print ('Checking new transactions in account: ' + item['budget_name'] + '. ID: ' + item['budget_id']).encode('utf8')
     transactions.extend(getNewJointTransactions(item['budget_id']))    
 parseTransactions(transactions)
+removeDeletedBudgets()
