@@ -624,7 +624,6 @@ XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 ##############
 backupTransactionsCache()
 MasterJSON = YNAB_Fetch('')
-removeDeletedBudgets()
 print 'Grabbed MasterJSON'
 AllDeltaAccounts = getAllDeltaAccounts()
 print 'All Joint Account IDs grabbed.'
