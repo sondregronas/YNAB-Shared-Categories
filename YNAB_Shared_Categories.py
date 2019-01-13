@@ -340,7 +340,7 @@ def mergeDicts(old, changes):
                 for d2 in old['data']['budget'][x]:
                     if d1['id'] == d2['id']:
                         n = False
-                        old['data']['budget'][x][i] = d1
+                        d2[x] = d1
                         oldamount += 1
                         break
                 if n:
