@@ -16,51 +16,71 @@ import sys
 import time
 from shutil import copyfile
 import ConfigParser
+import copy
+import logging
 
-# Gets the file path for caches
 def getCachePath(param):
+    '''
+    Takes the YNAB API parameter (param)
+    Returns a string of the corresponding budget's cache file path
+    '''
     if '?last_knowledge_of_server=' in param:
         param = param.split('?')[0]
     if '/' in param:
         return 'caches/'+(param).replace('/','.')
-    if param == '': 
-        return 'caches/main-json.cache'
     return 'caches/'+(param+'.cache').replace('/','.')
 
-# Delta commands have a slightly different URL, this one returns the correct one
-def getURL(param, accesstoken):  
+def getURL(param, accesstoken):
+    '''
+    Takes the YNAB API Parameter (param), and accesstoken (Use getAccessTokenByBudgetID()).
+    Returns a string: URL path
+    '''  
     if '?last_knowledge_of_server=' in param:
         return ('https://api.youneedabudget.com/v1/budgets/' + str(param) + '&access_token=' + str(accesstoken))
     else:
         return ('https://api.youneedabudget.com/v1/budgets/' + str(param) + '?access_token=' + str(accesstoken))
 
-# Checks the cache data. If there is no no cache it will call YNAB_Fetch for first time launch
 def YNAB(param, accesstoken):
+    '''
+    Takes the YNAB API Parameter (param), and accesstoken (getAccessTokenByBudgetID()).
+    Creates a cache file if none exist
+    Returns json data
+    '''
     path = getCachePath(param)
     if os.path.isfile(path):
         return YNAB_ParseCache(param)
     return YNAB_Fetch(param, accesstoken=accesstoken)
 
-# Reads the cache and returns it as if it was from the server.
 def YNAB_ParseCache(param):
+    '''
+    Reads cache file based on YNAB API Parameter (param) as if it's from the YNAB servers.
+    Cache reconstructs itself if corrupt
+    Returns json data
+    '''
     path = getCachePath(param)
     with open(path) as f:
         try:
             data = json.load(f)
         except ValueError:
             x = (path.split('/')[1]).split('.')[0]
-            print 'Corrupt file ' + path + '. Fetching new from YNAB.'
+            logging.error('[ERROR] Corrupt file ' + path + '. Fetching new from YNAB.')
             data = YNAB_Fetch(x)
             writeCache(data,x)
     return data
 
-# Remove key from dictionary nondestructively
 def removekey(d, key):
+    '''
+    Removes a key from dictionary nondestructively
+    Returns modified dictionary
+    '''
     r = dict(d)
     del r[key]
     return r
 
 def requestData(url, data, header):
+    '''
+    A more reliable version of urllib2.Request(). Attempts to Request multiple times before recovering backed up cache 
+    '''
     i = 0
     attempts = 10
     while i < attempts:
@@ -70,22 +90,25 @@ def requestData(url, data, header):
             break
         except urllib2.HTTPError, e:
             if i == attempts:
-                print 'HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                logging.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e) 
-            print('HTTP Request '+e+' Failed ' + str(i) + ' times.')
+            logging.error('[ERROR] HTTP Request '+e+' Failed ' + str(i) + ' times.')
         except urllib2.URLError, e:
             if i == attempts:
-                print 'URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                logging.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
-            print('URL Failed '+e+' ' + str(i) + ' times.')
+            logging.error('[ERROR] URL Failed '+e+' ' + str(i) + ' times.')
         time.sleep(1)
     return req
 
-# fetchData returns the data from an URL, but doesn't write cache
 xratemet = 0
 def fetchData(url):
+    '''
+    Returns raw urllib2 data from an URL (YNAB).
+    Does multiple attempts before recovering backed up cache
+    '''
     global xratemet
     i = 0
     attempts = 10
@@ -115,19 +138,19 @@ def fetchData(url):
             if e.code == 500:
                 f = ('HTTP Error 500: Internal Server Error, unexpected error')
             if i == attempts:
-                print 'HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                logging.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(f) 
-            print('HTTP Request Failed ' + str(i) + ' times.')
+            logging.error('[ERROR] HTTP Request Failed ' + str(i) + ' times.')
         except urllib2.URLError, e:
             if i == attempts:
-                print 'URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                logging.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
-            print('URL Failed ' + str(i) + ' times.')
+            logging.error('URL Failed ' + str(i) + ' times.')
         except httplib.BadStatusLine as e:
             if i == attempts:
-                print 'Failed too many times (' + str(i) + ') times. Recovering backed up transactions.'
+                logging.critical('[ERROR] Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
         time.sleep(1)
@@ -139,6 +162,10 @@ def fetchData(url):
     return data
 
 def writeCache(data, param):
+    '''
+    Writes data to a cache filed based on the YNAB API Parameter (param) using getCachePath(param)
+    Returns data
+    '''
     path = getCachePath(param)
     if not os.path.exists('caches'):
         os.mkdir('caches')
@@ -146,10 +173,14 @@ def writeCache(data, param):
         json.dump(data,cache)
     return data
 
-# Fetches data from the server and writes it to cache
 def YNAB_Fetch(param, accesstoken=None):
+    '''
+    Takes YNAB API Parameter (param) and an optional singular accesstoken (accesstoken=X)
+    Grabs data from the YNAB server and writes it to cache.
+    Also adds accesstoken to cache with key: 'token'
+    Returns dictionaries of data (Single dictionary with specified accesstoken)
+    '''
     O = []
-    global AccessToken
     for Y in AccessToken:
         if accesstoken != None:
             Y = accesstoken
@@ -164,21 +195,22 @@ def YNAB_Fetch(param, accesstoken=None):
     return O
 
 def deleteBudgetCache(id):
-    a = 'caches/' + id + '.cache'
-    b = 'caches/' + id + '.transactions'
-    c = 'caches/' + id + '.transactions.backup'
-    d = 'caches/' + id + '.queue'
-    if os.path.exists(a):
-        os.remove(a)
-    if os.path.exists(b):
-        os.remove(b)
-    if os.path.exists(c):
-        os.remove(c)
-    if os.path.exists(d):
-        os.remove(d)
+    '''
+    Takes a Budget ID and removes all relevant caches
+    '''
+    y = {('caches/' + id + '.cache'),
+        ('caches/' + id + '.transactions'),
+        ('caches/' + id + '.transactions.backup'),
+        ('caches/' + id + '.queue')}
+    for x in y:
+        if os.path.exists(x):
+            os.remove(x)
 
-# Detect deleted budgets and remove their associated caches
 def removeDeletedBudgets():
+    '''
+    Detects deleted budgets by matching caches folder with MasterJSON.
+    Sends unwanted caches to deleteBudgetCache(id)
+    '''
     for file in os.listdir('caches/'):
         if file.endswith('.cache'):
             x = True
@@ -189,7 +221,7 @@ def removeDeletedBudgets():
                         # Cache is correct
                         break
             if x == True:
-                print 'Budget ' + file.split('.')[0] + ' is no longer in MasterJSON. Deleting'
+                logging.warn('[CACHE] Budget ' + file.split('.')[0] + ' is no longer in MasterJSON. Deleting')
                 deleteBudgetCache(file.split('.')[0])
 
 # Creates a backup of every .transactions file, which can be recovered if the POST doesn't go through, so that the server_knowledge is reset.
@@ -214,7 +246,7 @@ def recoverTransactions():
                 dst = ('caches/'+file).split('.backup')[0]
                 copyfile(src,dst)
     else:
-        print 'No recovery made due to queued up transactions.'
+        logging.warn('[ERROR] No recovery made due to queued up transactions.')
 
 # Used by getAllSharedCategories
 # Searches every category for the string 'CombinedAffix' in notes, 
@@ -240,7 +272,7 @@ def getAllSharedCategories(): # Needs Caching & Delta
             if index['deleted'] == False:
                 index.update({'budget_name':item['budget_name'], 'budget_id':item['budget_id']})
                 output.append(index)
-                print ('Found Category: ' + index['name'] + ' With ID: ' + index['id'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name'] + ' with ID: ' + index['budget_id']).encode('utf8')
+                logging.debug(('[CATEGORY] Found Category: ' + index['name'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name']).encode('utf8'))
     return output
 
 # Used to store all Delta Accounts in a dictionary
@@ -250,14 +282,14 @@ def getAllDeltaAccounts():
     for M in MasterJSON:
         for item in M['data']['budgets']:
             if os.path.isfile(str('caches/' + item['id'] + '.cache')) == True:
-                print ('Checking for updates in ' + item['name']).encode('utf8')
+                logging.debug(('[CACHE] Checking for updates in ' + item['name']).encode('utf8'))
                 getBudgetUpdates(item['id'], M['token'])
 
-            print ('Checking for Delta Accounts in ' + item['name']).encode('utf8')
+            logging.debug(('[BUDGET] Checking for Delta Accounts in ' + item['name']).encode('utf8'))
             json = YNAB(item['id'], M['token'])
             acc = findAccountByNote(AccountSyntax, json)
             if acc != None and acc['deleted'] == False:
-                print ('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id']).encode('utf8')
+                logging.debug(('[ACCOUNT] Found Account: ' + acc['name'] + ' from budget: ' + item['name']).encode('utf8'))
                 acc.update({'budget_name':item['name'], 'budget_id':item['id']})
                 output.append(acc)
     return output
@@ -294,94 +326,31 @@ def fetchCategoryIdByName(budget_id, name):
 
 # Updates new Accounts and Categories dictionaries to the old dictionary
 def mergeDicts(old, changes):
-    # Accounts
-    a = changes['data']['budget']['accounts']
-    b = changes['data']['budget']['categories']
-    c = changes['data']['budget']['transactions']
-    d = changes['data']['budget']['subtransactions']
-    if a != [] or b != [] or c != [] or d != []:
-        # Accounts
-        oldamount = 0
-        newamount = 0
-        for d1 in a:
-            n = True
-            for i, d2 in enumerate(old['data']['budget']['accounts']):
-                if d1['id'] == d2['id']:
-                    n = False
-                    old['data']['budget']['accounts'][i] = d1
-                    oldamount += 1
-                    break
-            if n:
-                n = d1
-                old['data']['budget']['accounts'].append(d1)
-                newamount += 1
-        if oldamount >= 1:
-            print ('Updated ' + str(oldamount) + ' existing accounts.').encode('utf8')
-        if newamount >= 1:
-            print ('Cached ' + str(oldamount) + ' new accounts.').encode('utf8')
-            
-        # Categories
-        oldamount = 0
-        newamount = 0
-        for d1 in b:
-            n = True
-            for i, d2 in enumerate(old['data']['budget']['categories']):
-                if d1['id'] == d2['id']:
-                    n = False
-                    old['data']['budget']['categories'][i] = d1
-                    oldamount += 1
-                    break
-            if n:
-                n = d1
-                old['data']['budget']['categories'].append(d1)
-                newamount += 1
-        if oldamount >= 1:
-            print ('Updated ' + str(oldamount) + ' existing categories.').encode('utf8')
-        if newamount >= 1:
-            print ('Cached ' + str(oldamount) + ' new categories.').encode('utf8')
+    X = ['accounts',
+        'categories',
+        'transactions',
+        'subtransactions']
 
-        # Transactions
-        oldamount = 0
-        newamount = 0
-        for d1 in c:
-            n = True
-            for i, d2 in enumerate(old['data']['budget']['transactions']):
-                if d1['id'] == d2['id']:
-                    n = False
-                    old['data']['budget']['transactions'][i] = d1
-                    oldamount += 1
-                    break
-            if n:
-                n = d1
-                old['data']['budget']['transactions'].append(d1)
-                newamount += 1
-        if oldamount >= 1:
-            print ('Updated ' + str(oldamount) + ' existing transactions.').encode('utf8')
-        if newamount >= 1:
-            print ('Cached ' + str(oldamount) + ' new transactions.').encode('utf8')
-        # Subtransactions
-        oldamount = 0
-        newamount = 0
-        for d1 in d:
-            n = True
-            for i, d2 in enumerate(old['data']['budget']['subtransactions']):
-                if d1['id'] == d2['id']:
-                    n = False
-                    old['data']['budget']['subtransactions'][i] = d1
-                    oldamount += 1
-                    break
-            if n:
-                n = d1
-                old['data']['budget']['subtransactions'].append(d1)
-                newamount += 1
-        if oldamount >= 1:
-            print ('Updated ' + str(oldamount) + ' existing subtransactions.').encode('utf8')
-        if newamount >= 1:
-            print ('Cached ' + str(oldamount) + ' new subtransactions.').encode('utf8')
-        # Server knowledge
-        old['data']['server_knowledge'] = changes['data']['server_knowledge']
-        return old
-    return False
+    for i, x in enumerate(X):
+        if changes['data']['budget'][x] != []:
+            oldamount = 0
+            newamount = 0
+            for d1 in changes['data']['budget'][x]:
+                n = True
+                for d2 in old['data']['budget'][x]:
+                    if d1['id'] == d2['id']:
+                        n = False
+                        old['data']['budget']['accounts'][i] = d1
+                        oldamount += 1
+                        break
+                if n:
+                    n = d1
+                    old['data']['budget']['accounts'].append(d1)
+                    newamount += 1
+            if oldamount >= 1 or newamount >= 1:
+                logging.debug(('[CACHE] Updated ' + str(oldamount) + ' and added ' + str(newamount) + ' new ' + x).encode('utf8'))
+    old['data']['server_knowledge'] = changes['data']['server_knowledge']
+    return old
 
 # Fetches new data & adds it to the cache
 def getBudgetUpdates(budget_id, accesstoken):
@@ -414,7 +383,7 @@ def checkTransaction(item):
                 output.append(item)
                 return output
     else:
-        print 'Split Transaction detected'
+        logging.debug('[TRANSACTION] Split Transaction detected')
         output = []
         for sub in item['subtransactions']:
             checkCategory = isCategoryShared(sub['category_id'])
@@ -510,11 +479,14 @@ def sendBulkTransactions(bulk):
 
             send.append({'url':url, 'data':data, 'target':targetbudget})
 
+    if send == []:
+        logging.info('[SCRIPT] 0 new transactions.')
+
     recover = False
     for i in send:
         req = requestData(i['url'], i['data'], {'Content-Type': 'application/json', 'Content-Length': len(i['data'])})
         response = fetchData(req)
-        print response.read()
+        logging.info(response.read())
 
         # Remove queue on successful run
         path = str('caches/' + i['target'] + '.queue')
@@ -556,7 +528,7 @@ def verifyTransaction(tr):
             if tr['note'] == categories['note'] and tr['category_id'] != categories['id']:
                 if categories['budget_id'] == budgets['budget_id']:
                     # Debug message
-                    print ('Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name'] + '. ID: ' + budgets['budget_id']).encode('utf8')
+                    logging.debug(('[TRANSACTION] Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name'] + '. ID: ' + budgets['budget_id']).encode('utf8'))
 
                     # Variables of necessary data
                     for delta in AllDeltaAccounts:
@@ -591,6 +563,23 @@ def verifyTransaction(tr):
                     break
     return output
 
+def parseWhitelist():
+    O = copy.deepcopy(MasterJSON)
+    for val, M in enumerate(O):
+        i = 0
+        for x in M['data']['budgets']:
+            z = True
+            for y in Whitelist:
+                if x['id'] == y or x['name'] == y:
+                    logging.debug('[WHITELIST] Whitelisted: ' + MasterJSON[val]['data']['budgets'][i]['name'])
+                    z = False
+                    break
+            if z:
+                logging.debug('[WHITELIST] Skipping: ' + MasterJSON[val]['data']['budgets'][i]['name'])
+                del MasterJSON[val]['data']['budgets'][i]
+                continue
+            i += 1
+
 # This currently does not handle edited transactions - not sure how to go about that
 # parseTransactions prepares the main transaction to be sent out
 def parseTransactions(jointTransactions):
@@ -601,36 +590,40 @@ def parseTransactions(jointTransactions):
         if tr != None:
             if tr['deleted'] == True:
                 if IncludeDeleted == True:
-                    print 'Deleted Transaction Found. Parsing in the negative amount'
+                    logging.debug('[TRANSACTION] Deleted Transaction Found. Parsing in negative amount')
                     tr.update({ 'amount':-1*(tr['amount']),
                                 'memo':'DELETED TRANSACTION',
                                 'payee_name':'Deleted'})
                     output.extend(verifyTransaction(tr))
             else:
-                print ('Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']).encode('utf8')
+                logging.debug(('[TRANSACTION] Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']).encode('utf8'))
                 output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
 def createConfig(path):
     config = ConfigParser.RawConfigParser(allow_no_value=True)
-
     config.optionxform = str
-
+    # Key
     config.add_section('Key')
     config.set('Key', '# For multiple YNAB accounts, separate tokens with a comma "Token1, Token2"')
     config.set('Key', 'Access-Token', 'YOUR_ACCESS_TOKEN_HERE(https://app.youneedabudget.com/settings/developer)')
-
+    # User
     config.add_section('User')
     config.set('User', 'Account-Syntax', 'Shared_Delta')
     config.set('User', 'Category-Syntax', 'Shared_ID:')
     config.set('User', 'Category-Affix', '<!>')
-
+    # Options
     config.add_section('Options')
+    config.set('Options', '# Only whitelisted budgets are parsed. Parses every budget by default. Separate Budget IDs/Names with a comma "ID1, ID2"')
+    config.set('Options', 'Whitelisted-Budgets', '')
     config.set('Options', 'Detect-Deleted', '1')
-
+    # Meta
     config.add_section('Meta')
     config.set('Meta', 'X-Rate-Treshold', 20)
-
+    # Debug
+    config.add_section('Debug')
+    config.set('Debug', 'Verbose-Output', '1')
+    # Write config if empty
     if path != '':
         with open(path, 'wb') as configfile:
             config.write(configfile)
@@ -639,7 +632,7 @@ def createConfig(path):
 # Config
 # Creates a config file if it doesn't exist
 if not os.path.exists('YNAB_Shared_Categories.cfg'):
-        print 'Creating YNAB_Shared_Categories.cfg'
+        logging.info('[INITIALIZE] Creating YNAB_Shared_Categories.cfg')
         createConfig('YNAB_Shared_Categories.cfg')
         sys.exit('YNAB_Shared_Categories.cfg was created. Add your Access Token to this file')
 
@@ -654,34 +647,51 @@ if 'youneedabudget' in config.get('Key', 'Access-Token'):
     sys.exit('Access Token needs to be added in YNAB_Shared_Categories.cfg.')
 
 # Key
-AccessToken     = config.get('Key', 'Access-Token').replace(' ','').split(',')
-
+AccessToken     = [x.strip() for x in config.get('Key', 'Access-Token').split(',')]
 # User
 AccountSyntax   = config.get('User', 'Account-Syntax')
 CategorySyntax  = config.get('User', 'Category-Syntax')
 CategoryAffix   = config.get('User', 'Category-Affix')
 CombinedAffix   = CategoryAffix + CategorySyntax
-
 # Options
 IncludeDeleted  = config.getboolean('Options', 'Detect-Deleted')
-
+Whitelist       = [x.strip() for x in config.get('Options', 'Whitelisted-Budgets').split(',')]
 # Meta
 XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
-
+# Debug
+if config.getboolean('Debug','Verbose-Output'): 
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+else:
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 ##############
 # SCRIPT START
 ##############
+start_time = time.time()
+logging.info('[SCRIPT] Backing up existing transactions cache')
 backupTransactionsCache()
+logging.info('[SCRIPT] Done')
+logging.info('[SCRIPT] Grabbing MasterJSON')
 MasterJSON = YNAB_Fetch('')
-print 'Grabbed MasterJSON'
+logging.info('[SCRIPT] Grabbed MasterJSON')
+if Whitelist != ['']:
+    logging.info('[SCRIPT][OPTIONAL] Whitelist found. Parsing Whitelist')
+    parseWhitelist()
+    logging.info('[SCRIPT][OPTIONAL] Done parsing Whitelist')
+logging.info('[SCRIPT] Grabbing Shared Account IDs')
 AllDeltaAccounts = getAllDeltaAccounts()
-print 'All Joint Account IDs grabbed.'
+logging.info('[SCRIPT] All Shared Account IDs grabbed.')
+logging.info('[SCRIPT] Grabbing Shared Category IDs')
 AllSharedCategories = getAllSharedCategories()
-print 'All Joint Category IDs grabbed.'
+logging.info('[SCRIPT] All Shared Category IDs grabbed.')
 transactions = []
 for item in AllDeltaAccounts:
-    print ('Checking new transactions in account: ' + item['budget_name'] + '. ID: ' + item['budget_id']).encode('utf8')
-    transactions.extend(getNewJointTransactions(item['budget_id']))    
+    logging.info(('[SCRIPT] Checking for new transactions in budget: ' + item['budget_name']).encode('utf8'))
+    transactions.extend(getNewJointTransactions(item['budget_id']))
+logging.info('[SCRIPT] Grabbed all new transactions.')    
+logging.info('[SCRIPT] Sending new transactions to parser, if any')
 parseTransactions(transactions)
+logging.info('[SCRIPT] Completed parsing of transactions')
+logging.info('[SCRIPT] Completed script. Cleaning up')
 removeDeletedBudgets()
+logging.info("[SCRIPT] Script finished execution after %s seconds " % round((time.time() - start_time),2))
