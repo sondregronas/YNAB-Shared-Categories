@@ -3,7 +3,6 @@
     # Todo
     # Web hosting
     # Sync budgeted amount
-    # Handle edited transactions (currently show up as new)
     #
     #####
 
@@ -28,6 +27,8 @@ def getCachePath(param):
         param = param.split('?')[0]
     if '/' in param:
         return 'caches/'+(param).replace('/','.')
+    if '.cache.backup' in param:
+        return 'caches/'+param
     return 'caches/'+(param+'.cache').replace('/','.')
 
 def getURL(param, accesstoken):
@@ -156,7 +157,7 @@ def fetchData(url):
         time.sleep(1)
 
     xrate = data.info().get('X-Rate-Limit')
-    if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(XRateTreshold)) and xratemet == 0: #Safety Treshold, incase there isn't enough X-Rates to complete the script.
+    if int(xrate.split('/')[0]) >= (int(xrate.split('/')[1])-int(XRateTreshold)) and xratemet == 0: #Safety Treshold, incase there aren't enough X-Rates to complete the script.
         sys.exit('Surpassed X-Rate-Limit Safety treshold ' + xrate +', will run once more is available')
     xratemet += 1
     return data
@@ -201,7 +202,8 @@ def deleteBudgetCache(id):
     y = {('caches/' + id + '.cache'),
         ('caches/' + id + '.transactions'),
         ('caches/' + id + '.transactions.backup'),
-        ('caches/' + id + '.queue')}
+        ('caches/' + id + '.queue'),
+        ('caches/' + id + '.cache.backup')}
     for x in y:
         if os.path.exists(x):
             os.remove(x)
@@ -230,7 +232,7 @@ def backupTransactionsCache():
     if not os.path.exists('caches'):
         os.mkdir('caches')
     for file in os.listdir('caches/'):
-        if file.endswith('.transactions'):
+        if file.endswith('.cache') or file.endswith('.transactions'):
             src = 'caches/'+file
             dst = 'caches/'+file+'.backup'
             copyfile(src,dst)
@@ -331,16 +333,16 @@ def mergeDicts(old, changes):
         'transactions',
         'subtransactions']
 
-    for i, x in enumerate(X):
+    for x in X:
         if changes['data']['budget'][x] != []:
             oldamount = 0
             newamount = 0
             for d1 in changes['data']['budget'][x]:
                 n = True
-                for d2 in old['data']['budget'][x]:
+                for i, d2 in enumerate(old['data']['budget'][x]):
                     if d1['id'] == d2['id']:
                         n = False
-                        d2[x] = d1
+                        old['data']['budget'][x][i] = d1
                         oldamount += 1
                         break
                 if n:
@@ -376,12 +378,28 @@ def checkTransaction(item):
         checkCategory = isCategoryShared(item['category_id'])
         if checkCategory != False:
             if not isAccountDelta(item['account_id']):
+                
+                # Check if ID is in transactions cache.
+                if HandleEdits:
+                    for cache in (YNAB_ParseCache(checkCategory['budget_id']+'.cache.backup'))['data']['budget']['transactions']:
+                        if item['id'] == cache['id']:
+                            logging.debug('[TRANSACTION] Transaction already exists. Adjusting amount')
+                            amount = item['amount'] - cache['amount']
+                            logging.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
+                            item.update({'amount':amount,
+                                        'memo':item['memo'] + ' (Adjusted)'})
+                            break
+
                 item.update({'budget_id':checkCategory['budget_id'], 
                             'budget_name':checkCategory['budget_name'], 
                             'note':checkCategory['note']})
                 output = []
-                output.append(item)
-                return output
+                if item['amount'] != 0:
+                    output.append(item)
+                else:
+                    logging.debug('[TRANSACTION] Transaction amount is 0. Skipping')
+                if output != []:
+                    return output
     else:
         logging.debug('[TRANSACTION] Split Transaction detected')
         output = []
@@ -389,6 +407,18 @@ def checkTransaction(item):
             checkCategory = isCategoryShared(sub['category_id'])
             if checkCategory != False:
                 if not isAccountDelta(item['account_id']):
+
+                    # Check if ID is in subtransactions cache.
+                    if HandleEdits:
+                        for cache in (YNAB_ParseCache(checkCategory['budget_id']+'.cache.backup'))['data']['budget']['subtransactions']:
+                            if sub['id'] == cache['id']:
+                                logging.debug('[TRANSACTION] Subtransaction already exists. Adjusting amount')
+                                amount = sub['amount'] - cache['amount']
+                                logging.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(sub['amount']) + '. New sum: ' + str(amount))
+                                sub.update({'amount':amount,
+                                            'memo':sub['memo'] + ' (Adjusted)'})
+                                break
+
                     x = removekey(item, 'subtransactions')
                     x.update({
                         'budget_id':checkCategory['budget_id'], 
@@ -401,7 +431,10 @@ def checkTransaction(item):
                         'deleted':sub['deleted'],
                         'memo':sub['memo'] + ' (Split)'
                     })
-                    output.append(x)
+                    if x['amount'] != 0:
+                        output.append(x)
+                    else:
+                        logging.debug('[TRANSACTION] Subransaction amount is 0. Skipping')
         if output != []:
             return output
 
@@ -528,7 +561,7 @@ def verifyTransaction(tr):
             if tr['note'] == categories['note'] and tr['category_id'] != categories['id']:
                 if categories['budget_id'] == budgets['budget_id']:
                     # Debug message
-                    logging.debug(('[TRANSACTION] Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name'] + '. ID: ' + budgets['budget_id']).encode('utf8'))
+                    logging.debug(('[TRANSACTION] Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name']).encode('utf8'))
 
                     # Variables of necessary data
                     for delta in AllDeltaAccounts:
@@ -596,7 +629,7 @@ def parseTransactions(jointTransactions):
                                 'payee_name':'Deleted'})
                     output.extend(verifyTransaction(tr))
             else:
-                logging.debug(('[TRANSACTION] Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']).encode('utf8'))
+                logging.debug(('[TRANSACTION] Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name']).encode('utf8'))
                 output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
@@ -617,6 +650,7 @@ def createConfig(path):
     config.set('Options', '# Only whitelisted budgets are parsed. Parses every budget by default. Separate Budget IDs/Names with a comma "ID1, ID2"')
     config.set('Options', 'Whitelisted-Budgets', '')
     config.set('Options', 'Detect-Deleted', '1')
+    config.set('Options', 'Handle-Edits', '1')
     # Meta
     config.add_section('Meta')
     config.set('Meta', 'X-Rate-Treshold', 20)
@@ -654,8 +688,9 @@ CategorySyntax  = config.get('User', 'Category-Syntax')
 CategoryAffix   = config.get('User', 'Category-Affix')
 CombinedAffix   = CategoryAffix + CategorySyntax
 # Options
-IncludeDeleted  = config.getboolean('Options', 'Detect-Deleted')
 Whitelist       = [x.strip() for x in config.get('Options', 'Whitelisted-Budgets').split(',')]
+IncludeDeleted  = config.getboolean('Options', 'Detect-Deleted')
+HandleEdits     = config.getboolean('Options', 'Handle-Edits')
 # Meta
 XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 # Debug
@@ -669,7 +704,7 @@ else:
 ##############
 logging.info('[SCRIPT] Starting script')
 start_time = time.time()
-logging.info('[SCRIPT] Backing up existing transactions cache')
+logging.info('[SCRIPT] Backing up existing caches')
 backupTransactionsCache()
 logging.info('[SCRIPT] Done')
 logging.info('[SCRIPT] Grabbing MasterJSON')
@@ -689,7 +724,7 @@ transactions = []
 logging.info('[SCRIPT] Grabbing new transactions.')
 for i, item in enumerate(AllDeltaAccounts, start=1):
     transactions.extend(getNewJointTransactions(item['budget_id']))
-    logging.debug(('[TRANSACTION] Grabbed ' + str(i) + '/' + str(len(AllDeltaAccounts)) + ' Source: ' + item['budget_name']).encode('utf8'))
+    logging.debug(('[TRANSACTION] Finished grabbing transactions from ' + item['budget_name'] + ' (' + str(i) + '/' + str(len(AllDeltaAccounts)) + ')').encode('utf8'))
 logging.info('[SCRIPT] Finished grabbing transactions.')    
 logging.info('[SCRIPT] Sending new transactions to parser, if any')
 parseTransactions(transactions)
