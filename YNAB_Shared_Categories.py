@@ -3,7 +3,7 @@
     # Todo
     # Web hosting
     # Sync budgeted amount
-    # Cross YNAB account support
+    # Handle edited transactions (currently show up as new)
     #
     #####
 
@@ -28,17 +28,18 @@ def getCachePath(param):
     return 'caches/'+(param+'.cache').replace('/','.')
 
 # Delta commands have a slightly different URL, this one returns the correct one
-def getURL(param):  
+def getURL(param, accesstoken):  
     if '?last_knowledge_of_server=' in param:
-        return 'https://api.youneedabudget.com/v1/budgets/' + str(param) + '&access_token=' + str(AccessToken)
-    return 'https://api.youneedabudget.com/v1/budgets/' + str(param) + '?access_token=' + str(AccessToken)
+        return ('https://api.youneedabudget.com/v1/budgets/' + str(param) + '&access_token=' + str(accesstoken))
+    else:
+        return ('https://api.youneedabudget.com/v1/budgets/' + str(param) + '?access_token=' + str(accesstoken))
 
 # Checks the cache data. If there is no no cache it will call YNAB_Fetch for first time launch
-def YNAB(param):
+def YNAB(param, accesstoken):
     path = getCachePath(param)
     if os.path.isfile(path):
         return YNAB_ParseCache(param)
-    return YNAB_Fetch(param)
+    return YNAB_Fetch(param, accesstoken=accesstoken)
 
 # Reads the cache and returns it as if it was from the server.
 def YNAB_ParseCache(param):
@@ -46,7 +47,7 @@ def YNAB_ParseCache(param):
     with open(path) as f:
         try:
             data = json.load(f)
-        except ValueError as e:
+        except ValueError:
             x = (path.split('/')[1]).split('.')[0]
             print 'Corrupt file ' + path + '. Fetching new from YNAB.'
             data = YNAB_Fetch(x)
@@ -146,12 +147,21 @@ def writeCache(data, param):
     return data
 
 # Fetches data from the server and writes it to cache
-def YNAB_Fetch(param):
-    url = getURL(param)
-    data = json.load(fetchData(url))
-    if param == '':
-        return data
-    return writeCache(data,param)
+def YNAB_Fetch(param, accesstoken=None):
+    O = []
+    global AccessToken
+    for Y in AccessToken:
+        if accesstoken != None:
+            Y = accesstoken
+        url = getURL(param, Y)
+        data = json.load(fetchData(url))
+        data.update({'token':Y})
+        O.append(data)
+        if param != '':
+            writeCache(data,param)
+        if accesstoken != None:
+            return data
+    return O
 
 def deleteBudgetCache(id):
     a = 'caches/' + id + '.cache'
@@ -172,11 +182,12 @@ def removeDeletedBudgets():
     for file in os.listdir('caches/'):
         if file.endswith('.cache'):
             x = True
-            for i in MasterJSON['data']['budgets']:
-                if file.split('.')[0] == i['id']:
-                    x = False
-                    # Cache is correct
-                    break
+            for M in MasterJSON:
+                for i in M['data']['budgets']:
+                    if file.split('.')[0] == i['id']:
+                        x = False
+                        # Cache is correct
+                        break
             if x == True:
                 print 'Budget ' + file.split('.')[0] + ' is no longer in MasterJSON. Deleting'
                 deleteBudgetCache(file.split('.')[0])
@@ -224,7 +235,7 @@ def getAllSharedCategories(): # Needs Caching & Delta
     output = []
     # Grabbing all Joint Category IDs
     for item in AllDeltaAccounts:
-        data = searchAllSharedCategories(CombinedAffix, YNAB(item['budget_id']))
+        data = searchAllSharedCategories(CombinedAffix, YNAB(item['budget_id'], AccessToken))
         for index in data:
             if index['deleted'] == False:
                 index.update({'budget_name':item['budget_name'], 'budget_id':item['budget_id']})
@@ -236,18 +247,19 @@ def getAllSharedCategories(): # Needs Caching & Delta
 def getAllDeltaAccounts():
     output = []
     # Grabbing all Delta Account IDs
-    for item in MasterJSON['data']['budgets']:
-        if os.path.isfile(str('caches/' + item['id'] + '.cache')) == True:
-            print ('Checking for updates in ' + item['name']).encode('utf8')
-            getBudgetUpdates(item['id'])
+    for M in MasterJSON:
+        for item in M['data']['budgets']:
+            if os.path.isfile(str('caches/' + item['id'] + '.cache')) == True:
+                print ('Checking for updates in ' + item['name']).encode('utf8')
+                getBudgetUpdates(item['id'], M['token'])
 
-        print ('Checking for Delta Accounts in ' + item['name']).encode('utf8')
-        json = YNAB(item['id'])
-        acc = findAccountByNote(AccountSyntax, json)
-        if acc != None and acc['deleted'] == False:
-            print ('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id']).encode('utf8')
-            acc.update({'budget_name':item['name'], 'budget_id':item['id']})
-            output.append(acc)
+            print ('Checking for Delta Accounts in ' + item['name']).encode('utf8')
+            json = YNAB(item['id'], M['token'])
+            acc = findAccountByNote(AccountSyntax, json)
+            if acc != None and acc['deleted'] == False:
+                print ('Found Account: ' + acc['name'] + ' With ID: ' + acc['id'] + ' from budget: ' + item['name'] + ' with ID: ' + item['id']).encode('utf8')
+                acc.update({'budget_name':item['name'], 'budget_id':item['id']})
+                output.append(acc)
     return output
 
 # Used by newTransactions parser to see if the new transaction is from a shared category
@@ -274,7 +286,8 @@ def findAccountByNote(note, json): # FINISHED
 
 # Gets the ID of the default category by name. Used to grab 'To be Budgeted' in parseDeltas
 def fetchCategoryIdByName(budget_id, name):
-    json = YNAB(str(budget_id))
+    accesstoken = getAccessTokenFromBudget(budget_id)
+    json = YNAB(str(budget_id), accesstoken)
     for item in json['data']['budget']['categories']:
         if item['name'] == name:
             return item['id']
@@ -288,84 +301,104 @@ def mergeDicts(old, changes):
     d = changes['data']['budget']['subtransactions']
     if a != [] or b != [] or c != [] or d != []:
         # Accounts
+        oldamount = 0
+        newamount = 0
         for d1 in a:
             n = True
             for i, d2 in enumerate(old['data']['budget']['accounts']):
                 if d1['id'] == d2['id']:
                     n = False
-                    print ('Old account ' + d1['name'] + ' updated.').encode('utf8')
                     old['data']['budget']['accounts'][i] = d1
+                    oldamount += 1
                     break
             if n:
                 n = d1
-                print ('New account ' + d1['name'] + ' added.').encode('utf8')
                 old['data']['budget']['accounts'].append(d1)
-                break
+                newamount += 1
+        if oldamount >= 1:
+            print ('Updated ' + str(oldamount) + ' existing accounts.').encode('utf8')
+        if newamount >= 1:
+            print ('Cached ' + str(oldamount) + ' new accounts.').encode('utf8')
+            
         # Categories
+        oldamount = 0
+        newamount = 0
         for d1 in b:
             n = True
             for i, d2 in enumerate(old['data']['budget']['categories']):
                 if d1['id'] == d2['id']:
                     n = False
-                    print ('Old category ' + d1['name'] + ' updated').encode('utf8')
                     old['data']['budget']['categories'][i] = d1
+                    oldamount += 1
                     break
             if n:
                 n = d1
-                print ('New category ' + d1['name'] + ' added.').encode('utf8')
                 old['data']['budget']['categories'].append(d1)
-                break
+                newamount += 1
+        if oldamount >= 1:
+            print ('Updated ' + str(oldamount) + ' existing categories.').encode('utf8')
+        if newamount >= 1:
+            print ('Cached ' + str(oldamount) + ' new categories.').encode('utf8')
+
         # Transactions
+        oldamount = 0
+        newamount = 0
         for d1 in c:
             n = True
             for i, d2 in enumerate(old['data']['budget']['transactions']):
                 if d1['id'] == d2['id']:
                     n = False
-                    print ('Old transaction ' + d1['id'] + ' updated').encode('utf8')
                     old['data']['budget']['transactions'][i] = d1
+                    oldamount += 1
                     break
             if n:
                 n = d1
-                print ('New transaction ' + d1['id'] + ' added.').encode('utf8')
                 old['data']['budget']['transactions'].append(d1)
-                break
+                newamount += 1
+        if oldamount >= 1:
+            print ('Updated ' + str(oldamount) + ' existing transactions.').encode('utf8')
+        if newamount >= 1:
+            print ('Cached ' + str(oldamount) + ' new transactions.').encode('utf8')
         # Subtransactions
+        oldamount = 0
+        newamount = 0
         for d1 in d:
             n = True
             for i, d2 in enumerate(old['data']['budget']['subtransactions']):
                 if d1['id'] == d2['id']:
                     n = False
-                    print ('Old subtransaction ' + d1['id'] + ' updated').encode('utf8')
                     old['data']['budget']['subtransactions'][i] = d1
+                    oldamount += 1
                     break
             if n:
                 n = d1
-                print ('New subtransaction ' + d1['id'] + ' added.').encode('utf8')
                 old['data']['budget']['subtransactions'].append(d1)
-                break
+                newamount += 1
+        if oldamount >= 1:
+            print ('Updated ' + str(oldamount) + ' existing subtransactions.').encode('utf8')
+        if newamount >= 1:
+            print ('Cached ' + str(oldamount) + ' new subtransactions.').encode('utf8')
         # Server knowledge
         old['data']['server_knowledge'] = changes['data']['server_knowledge']
         return old
     return False
 
 # Fetches new data & adds it to the cache
-def getBudgetUpdates(budget_id):
+def getBudgetUpdates(budget_id, accesstoken):
     param = budget_id+'?last_knowledge_of_server='
     path = getCachePath(param)
     if os.path.isfile(path):
-        main = YNAB(param)
+        main = YNAB(param, accesstoken)
         x = main['data']['server_knowledge']
     else: 
-        main = YNAB(budget_id)
+        main = YNAB(budget_id, accesstoken)
         x = main['data']['server_knowledge']
     param = param + str(x)
-    url = getURL(param)
+    url = getURL(param, accesstoken)
     data = json.load(fetchData(url))
     data = mergeDicts(main,data)
-    if data == False:
-        return None
-    writeCache(data, str(budget_id))
-    return data
+    if data != False:
+        writeCache(data, str(budget_id))
 
 # Checks if a transaction is in a shared category, and not in a delta account
 # Also parses Split transactions as separate entries
@@ -403,15 +436,23 @@ def checkTransaction(item):
         if output != []:
             return output
 
+def getAccessTokenFromBudget(budget_id):
+    path = getCachePath(budget_id)
+    if os.path.isfile(path):
+        with open(path) as f:
+            data = json.load(f)
+            return data['token']
+
 # Fetches all new transactions in a budget & returns every transaction in a shared category
 def getNewJointTransactions(budget_id):
     output = []
+    accesstoken = getAccessTokenFromBudget(budget_id)
     param = budget_id+'/transactions'
-    json = YNAB(param)
+    json = YNAB(param, accesstoken)
     server_knowledge = json['data']['server_knowledge']
 
     if server_knowledge != '':
-        json = YNAB_Fetch(param + '?last_knowledge_of_server=' + str(server_knowledge))
+        json = YNAB_Fetch(param + '?last_knowledge_of_server=' + str(server_knowledge), accesstoken=accesstoken)
 
     for item in json['data']['transactions']:
         x = checkTransaction(item)
@@ -463,7 +504,8 @@ def sendBulkTransactions(bulk):
                 transactiondata.append(data)
 
             targetbudget = str(tr[0]['target_budget'])
-            url = getURL(targetbudget+'/transactions/bulk')
+            accesstoken = getAccessTokenFromBudget(targetbudget)
+            url = getURL(targetbudget+'/transactions/bulk', accesstoken)
             data = json.dumps({'transactions':transactiondata})
 
             send.append({'url':url, 'data':data, 'target':targetbudget})
@@ -486,16 +528,19 @@ def parseDeltas(transaction):
     for delta in AllDeltaAccounts:
         x = transaction['amount']
         y = len(AllDeltaAccounts)
+        payee = transaction['payee_name']
+        if payee == None:
+            payee = '(Payee Was Blank)'
         cat_id = str(fetchCategoryIdByName(str(delta['budget_id']), 'To be Budgeted'))
         data = {'category_id': cat_id,
                 'category_name':'To be Budgeted', 
                 'account_id':delta['id'], 
                 'account_name':delta['name'],
                 'amount':-1*(x-(x/y)),
-                'memo': 'Split from ' + transaction['category_name'] + ', ' + transaction['payee_name'] + '. Source: ' + transaction['budget_name'],
+                'memo': ('Split from ' + transaction['category_name'] + ', ' + payee + '. Source: ' + transaction['budget_name']),
                 'date': transaction['date'],
                 'target_budget':delta['budget_id'],
-                'payee_name':'Delta', # transaction['payee_name'], - Unless there's a way to prevent the standard categories/account for the given Payee then a static Payee is better to keep the default payee values
+                'payee_name':'Delta',
 				'approved':transaction['approved']
                 }
         output.append(data) # For bulk transaction
@@ -554,21 +599,25 @@ def parseTransactions(jointTransactions):
     for tr in jointTransactions:
         # Check if deleted, if yes change amount
         if tr != None:
-            if tr['deleted'] == True and IncludeDeleted == True:
-                print 'Detected deleted transaction. Parsing in the negative amount'
-                tr.update({ 'amount':-1*(tr['amount']),
-                            'memo':'DELETED TRANSACTION',
-                            'payee_name':'Deleted'})
-                output.extend(verifyTransaction(tr))
+            if tr['deleted'] == True:
+                if IncludeDeleted == True:
+                    print 'Deleted Transaction Found. Parsing in the negative amount'
+                    tr.update({ 'amount':-1*(tr['amount']),
+                                'memo':'DELETED TRANSACTION',
+                                'payee_name':'Deleted'})
+                    output.extend(verifyTransaction(tr))
             else:
                 print ('Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name'] + '. ID: ' + tr['budget_id']).encode('utf8')
                 output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
 def createConfig(path):
-    config = ConfigParser.RawConfigParser()
+    config = ConfigParser.RawConfigParser(allow_no_value=True)
+
+    config.optionxform = str
 
     config.add_section('Key')
+    config.set('Key', '# For multiple YNAB accounts, separate tokens with a comma "Token1, Token2"')
     config.set('Key', 'Access-Token', 'YOUR_ACCESS_TOKEN_HERE(https://app.youneedabudget.com/settings/developer)')
 
     config.add_section('User')
@@ -605,7 +654,7 @@ if 'youneedabudget' in config.get('Key', 'Access-Token'):
     sys.exit('Access Token needs to be added in YNAB_Shared_Categories.cfg.')
 
 # Key
-AccessToken     = config.get('Key', 'Access-Token')
+AccessToken     = config.get('Key', 'Access-Token').replace(' ','').split(',')
 
 # User
 AccountSyntax   = config.get('User', 'Account-Syntax')
@@ -618,6 +667,7 @@ IncludeDeleted  = config.getboolean('Options', 'Detect-Deleted')
 
 # Meta
 XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
+
 
 ##############
 # SCRIPT START
