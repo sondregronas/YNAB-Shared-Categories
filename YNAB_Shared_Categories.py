@@ -340,12 +340,12 @@ def mergeDicts(old, changes):
                 for d2 in old['data']['budget'][x]:
                     if d1['id'] == d2['id']:
                         n = False
-                        old['data']['budget']['accounts'][i] = d1
+                        old['data']['budget'][x][i] = d1
                         oldamount += 1
                         break
                 if n:
                     n = d1
-                    old['data']['budget']['accounts'].append(d1)
+                    old['data']['budget'][x].append(d1)
                     newamount += 1
             if oldamount >= 1 or newamount >= 1:
                 logging.debug(('[CACHE] Updated ' + str(oldamount) + ' and added ' + str(newamount) + ' new ' + x).encode('utf8'))
@@ -667,6 +667,7 @@ else:
 ##############
 # SCRIPT START
 ##############
+logging.info('[SCRIPT] Starting script')
 start_time = time.time()
 logging.info('[SCRIPT] Backing up existing transactions cache')
 backupTransactionsCache()
@@ -685,10 +686,11 @@ logging.info('[SCRIPT] Grabbing Shared Category IDs')
 AllSharedCategories = getAllSharedCategories()
 logging.info('[SCRIPT] All Shared Category IDs grabbed.')
 transactions = []
-for item in AllDeltaAccounts:
-    logging.info(('[SCRIPT] Checking for new transactions in budget: ' + item['budget_name']).encode('utf8'))
+logging.info('[SCRIPT] Grabbing new transactions.')
+for i, item in enumerate(AllDeltaAccounts, start=1):
     transactions.extend(getNewJointTransactions(item['budget_id']))
-logging.info('[SCRIPT] Grabbed all new transactions.')    
+    logging.debug(('[TRANSACTION] Grabbed ' + str(i) + '/' + str(len(AllDeltaAccounts)) + ' Source: ' + item['budget_name']).encode('utf8'))
+logging.info('[SCRIPT] Finished grabbing transactions.')    
 logging.info('[SCRIPT] Sending new transactions to parser, if any')
 parseTransactions(transactions)
 logging.info('[SCRIPT] Completed parsing of transactions')
