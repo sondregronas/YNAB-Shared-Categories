@@ -19,6 +19,44 @@ from shutil import copyfile
 import ConfigParser
 import copy
 import logging
+from logging.handlers import RotatingFileHandler
+
+class YNABLog:
+    def debug(self, msg):
+        for x in self.logs:
+            x.debug(msg)
+    def info(self, msg):
+        for x in self.logs:
+            x.info(msg)
+    def warn(self, msg):
+        for x in self.logs:
+            x.warn(msg)
+    def error(self, msg):
+        for x in self.logs:
+            x.error(msg)
+    def critical(self, msg):
+        for x in self.logs:
+            x.critical(msg)
+    def verbose(self, log, bool):
+        if bool:
+            log.setLevel(logging.DEBUG)
+        else:
+            log.setLevel(logging.INFO)
+    def __init__(self):
+        logformat = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        # Streamlog
+        self.streamlog = logging.getLogger('Main')
+        streamloghandler = logging.StreamHandler()
+        streamloghandler.setFormatter(logformat)
+        self.streamlog.addHandler(streamloghandler)
+        # Filelog
+        self.filelog = logging.getLogger('YNAB')
+        fileloghandler = RotatingFileHandler('YNAB.log', mode='a', maxBytes=5*1024*1024, backupCount=2, encoding=None, delay=0)
+        fileloghandler.setFormatter(logformat)
+        self.filelog.addHandler(fileloghandler)
+        # Dict
+        self.logs = {self.streamlog,
+                    self.filelog}
 
 def getCachePath(param):
     '''
@@ -69,19 +107,19 @@ def YNAB_ParseCache(param):
             try:
                 data = json.load(f)
             except ValueError:
-                logging.error('[ERROR] Corrupt file ' + path + '. Fetching new from YNAB.')
+                logger.error('[ERROR] Corrupt file ' + path + '. Fetching new from YNAB.')
                 x = param.split('?')[0]
                 data = YNAB_Fetch(x)
-                logging.error('[CACHE] Cache restored. Retrying.')
+                logger.error('[CACHE] Cache restored. Retrying.')
                 continue
             if data['cacheversion'] != CACHEVERSION and path.endswith('.cache'):
-                logging.error('[CACHE] Cache version incorrect. Fetching new cache from YNAB')
+                logger.error('[CACHE] Cache version incorrect. Fetching new cache from YNAB')
                 x = param.split('?')[0]
                 data = YNAB_Fetch(x)
-                logging.error('[CACHE] Cache updated. Retrying.')
+                logger.error('[CACHE] Cache updated. Retrying.')
                 continue
         return data
-    logging.critical('[CACHE] Cache failed to load / repair itself')
+    logger.critical('[CACHE] Cache failed to load / repair itself')
     sys.exit('CACHE Failed to load / repair itself')
 
 def removekey(d, key):
@@ -106,16 +144,16 @@ def requestData(url, data, header):
             break
         except urllib2.HTTPError, e:
             if i == attempts:
-                logging.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e) 
-            logging.error('[ERROR] HTTP Request '+e+' Failed ' + str(i) + ' times.')
+            logger.error('[ERROR] HTTP Request '+e+' Failed ' + str(i) + ' times.')
         except urllib2.URLError, e:
             if i == attempts:
-                logging.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
-            logging.error('[ERROR] URL Failed '+e+' ' + str(i) + ' times.')
+            logger.error('[ERROR] URL Failed '+e+' ' + str(i) + ' times.')
         time.sleep(1)
     return req
 
@@ -154,19 +192,19 @@ def fetchData(url):
             if e.code == 500:
                 f = ('HTTP Error 500: Internal Server Error, unexpected error')
             if i == attempts:
-                logging.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(f) 
-            logging.error('[ERROR] HTTP Request Failed ' + str(i) + ' times.')
+            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times.')
         except urllib2.URLError, e:
             if i == attempts:
-                logging.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
-            logging.error('URL Failed ' + str(i) + ' times.')
+            logger.error('URL Failed ' + str(i) + ' times.')
         except httplib.BadStatusLine as e:
             if i == attempts:
-                logging.critical('[ERROR] Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERROR] Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
         time.sleep(1)
@@ -239,7 +277,7 @@ def removeDeletedBudgets():
                         # Cache is correct
                         break
             if x == True:
-                logging.warn('[CACHE] Budget ' + file.split('.')[0] + ' is no longer in MasterJSON. Deleting')
+                logger.warn('[CACHE] Budget ' + file.split('.')[0] + ' is no longer in MasterJSON. Deleting')
                 deleteBudgetCache(file.split('.')[0])
 
 # Creates a backup of every .transactions file, which can be recovered if the POST doesn't go through, so that the server_knowledge is reset.
@@ -264,7 +302,7 @@ def recoverTransactions():
                 dst = ('caches/'+file).split('.backup')[0]
                 copyfile(src,dst)
     else:
-        logging.warn('[ERROR] No recovery made due to queued up transactions.')
+        logger.warn('[ERROR] No recovery made due to queued up transactions.')
 
 # Used by getAllSharedCategories
 # Searches every category for the string 'CombinedAffix' in notes, 
@@ -290,7 +328,7 @@ def getAllSharedCategories(): # Needs Caching & Delta
             if index['deleted'] == False:
                 index.update({'budget_name':item['budget_name'], 'budget_id':item['budget_id']})
                 output.append(index)
-                logging.debug(('[CATEGORY] Found Category: ' + index['name'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name']).encode('utf8'))
+                logger.debug(('[CATEGORY] Found Category: ' + index['name'] + ' using Note: ' + index['note'] + ' from budget: ' + index['budget_name']).encode('utf8'))
     return output
 
 # Used to store all Delta Accounts in a dictionary
@@ -300,14 +338,14 @@ def getAllDeltaAccounts():
     for M in MasterJSON:
         for item in M['data']['budgets']:
             if os.path.isfile(str('caches/' + item['id'] + '.cache')) == True:
-                logging.debug(('[CACHE] Checking for updates in ' + item['name']).encode('utf8'))
+                logger.debug(('[CACHE] Checking for updates in ' + item['name']).encode('utf8'))
                 getBudgetUpdates(item['id'], M['token'])
 
-            logging.debug(('[BUDGET] Checking for Delta Accounts in ' + item['name']).encode('utf8'))
+            logger.debug(('[BUDGET] Checking for Delta Accounts in ' + item['name']).encode('utf8'))
             json = YNAB(item['id'], M['token'])
             acc = findAccountByNote(AccountSyntax, json)
             if acc != None and acc['deleted'] == False:
-                logging.debug(('[ACCOUNT] Found Account: ' + acc['name'] + ' from budget: ' + item['name']).encode('utf8'))
+                logger.debug(('[ACCOUNT] Found Account: ' + acc['name'] + ' from budget: ' + item['name']).encode('utf8'))
                 acc.update({'budget_name':item['name'], 'budget_id':item['id']})
                 output.append(acc)
     return output
@@ -393,7 +431,7 @@ def mergeDicts(old, changes):
                     old['data']['budget'][x].append(d1)
                     newamount += 1
             if oldamount >= 1 or newamount >= 1:
-                logging.debug(('[CACHE] Updated ' + str(oldamount) + ' and added ' + str(newamount) + ' new ' + x).encode('utf8'))
+                logger.debug(('[CACHE] Updated ' + str(oldamount) + ' and added ' + str(newamount) + ' new ' + x).encode('utf8'))
     old['data']['server_knowledge'] = changes['data']['server_knowledge']
     return old
 
@@ -418,7 +456,7 @@ def getBudgetUpdates(budget_id, accesstoken):
 # Also parses Split transactions as separate entries
 def checkTransaction(item):
     if item['subtransactions'] == []:
-        logging.debug('[TRANSCATION] Checking new transaction')
+        logger.debug('[TRANSCATION] Checking new transaction')
         checkCategory = isCategoryShared(item['category_id']) # Boolean if false. Dict if true
         checkAccount = isAccountDelta(item['account_id'])
         meta = getBudgetInfoByAccountId(item['account_id'])
@@ -441,22 +479,22 @@ def checkTransaction(item):
                     for cache in (YNAB_ParseCache(meta['id']+'.cache.backup'))['data']['budget']['transactions']:
                         if item['id'] == cache['id']:
                             exists = True
-                            logging.debug('[TRANSACTION] Transaction already exists in cache. Adjusting values')
+                            logger.debug('[TRANSACTION] Transaction already exists in cache. Adjusting values')
 
                             # Determine if old/new transaction is valid for progresesion
                             checkCachedAccount = isAccountDelta(cache['account_id'])
                             if checkCachedAccount and checkAccount:
-                                logging.debug('[TRANSACTION] Invalid Transaction. Transaction is in Delta')
+                                logger.debug('[TRANSACTION] Invalid Transaction. Transaction is in Delta')
                                 return
                             checkCachedCategory = isCategoryShared(cache['category_id']) # Boolean if false. Dict if true
                             if checkCachedCategory == False and not checkCategory:
-                                logging.debug('[TRANSACTION] Invalid Transaction. Transaction is not in a Shared Category')
+                                logger.debug('[TRANSACTION] Invalid Transaction. Transaction is not in a Shared Category')
                                 return
                             
                             # If both cached and new categories are shared, but not in the same category
                             if checkCachedCategory != False and checkCategory and not checkCachedAccount and not checkAccount:
                                 if item['category_id'] != cache['category_id']:
-                                    logging.debug('[TRANSACTION] Shared transction changed category. Adjusting amounts')
+                                    logger.debug('[TRANSACTION] Shared transction changed category. Adjusting amounts')
                                     amount = item['amount'] # For existing item
                                     olditem = cache
                                     olditem.update({'budget_id':meta['id'], 
@@ -470,25 +508,25 @@ def checkTransaction(item):
                                     if olditem['amount'] != 0:
                                         output.append(olditem)
                                     else:
-                                        logging.debug('[TRANSACTION] Transaction amount is 0. Skipping')
+                                        logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
 
                             # If category is moved from a regular one to a shared one. Parsed as a normal transaction
                             if checkCachedCategory == False and checkCategory and not checkCachedAccount and not checkAccount:
-                                logging.debug('[TRANSACTION] Transaction moved from a regular category to a shared category.')
+                                logger.debug('[TRANSACTION] Transaction moved from a regular category to a shared category.')
                                 amount = item['amount'] # For existing item
 
                             # If transaction is moved from Delta account to regular account (Parsed as normal transaction)
                             if checkCategory and not checkAccount and checkCachedAccount:
-                                logging.debug('[TRANSACTION] Transaction moved from Delta account to other account')
+                                logger.debug('[TRANSACTION] Transaction moved from Delta account to other account')
                                 amount = item['amount']
 
                             # If transaction is moved from regular account to delta account (Parsed as normal transaction)
                             if checkCachedCategory and checkAccount and not checkCachedAccount:
-                                logging.critical('[TRANSACTION][ERROR] Transaction moved to a delta account!!! TODO')
+                                logger.critical('[TRANSACTION][ERROR] Transaction moved to a delta account!!! TODO')
 
                             # If a category is moved from a shared one to a regular one. Parsed as a deleted transaction
                             if checkCachedCategory != False and not checkCategory and not checkCachedAccount and not checkAccount:
-                                logging.debug('[TRANSACTION] Transaction moved from a shared category to a regular one.')
+                                logger.debug('[TRANSACTION] Transaction moved from a shared category to a regular one.')
                                 olditem = cache
                                 olditem.update({'budget_id':meta['id'], 
                                             'budget_name':meta['name'], 
@@ -501,15 +539,15 @@ def checkTransaction(item):
                                 if olditem['amount'] != 0:
                                     output.append(olditem)
                                 else:
-                                    logging.debug('[TRANSACTION] Transaction amount is 0. Skipping')
+                                    logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
                                 SkipTransaction = True
 
                             ## Final touches before sending off
                             # If amount wasn't changed it means it was in cache but in the same category and 
                             if amount == None:
-                                logging.debug('[TRANSACTION] Transaction changed but Category didnt. Changing amount.')
+                                logger.debug('[TRANSACTION] Transaction changed but Category didnt. Changing amount.')
                                 amount = item['amount'] - cache['amount']
-                                logging.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
+                                logger.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
                             item.update({'amount':amount})
                             if item['memo'] != None:
                                 item.update({'memo':item['memo'] + ' (Adjusted)'})
@@ -520,7 +558,7 @@ def checkTransaction(item):
 
                     # If it doesn't exist in the cache and isn't shared skip it
                     if not exists and not checkCategory and checkAccount:
-                        logging.debug('[TRANSACTION] Transaction is brand new, but not in a shared Category or might be in a Delta Account.')
+                        logger.debug('[TRANSACTION] Transaction is brand new, but not in a shared Category or might be in a Delta Account.')
                         return
                     ## END HANDLE EDITS
 
@@ -536,11 +574,11 @@ def checkTransaction(item):
                     if item['amount'] != 0:
                         output.append(item)
                     else:
-                        logging.debug('[TRANSACTION] Transaction amount is 0. Skipping')
+                        logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
                 if output != []:
                     return output
     else:
-        logging.debug('[TRANSACTION] Split Transaction detected')
+        logger.debug('[TRANSACTION] Split Transaction detected')
         output = []
         for sub in item['subtransactions']:
             checkCategory = isCategoryShared(sub['category_id']) # Boolean if false. Dict if true
@@ -555,7 +593,7 @@ def checkTransaction(item):
                     amount = None
                     exists = False
                     # Check if ID is in transactions cache.
-                    logging.error('!!! ACCOUNT HANDLING NOT YET SUPPORTED IN SUBTRANSACTIONS !!!')
+                    logger.error('!!! ACCOUNT HANDLING NOT YET SUPPORTED IN SUBTRANSACTIONS !!!')
                     # NEED TO CLEAN HANDLEEDITS!!!
                     if sub['deleted'] and not checkCategory:
                         SkipTransaction = True
@@ -563,22 +601,22 @@ def checkTransaction(item):
                         for cache in (YNAB_ParseCache(meta['id']+'.cache.backup'))['data']['budget']['subtransactions']:
                             if sub['id'] == cache['id']:
                                 exists = True
-                                logging.debug('[TRANSACTION] Transaction already exists in cache. Adjusting values')
+                                logger.debug('[TRANSACTION] Transaction already exists in cache. Adjusting values')
 
                                 # Determine if old/new transaction is valid for progresesion
                                 checkCachedAccount =  False # isAccountDelta(cache['account_id'])
                                 if checkCachedAccount and checkAccount:
-                                    logging.debug('[TRANSACTION] Invalid Transaction. Transaction is in Delta')
+                                    logger.debug('[TRANSACTION] Invalid Transaction. Transaction is in Delta')
                                     return
                                 checkCachedCategory = isCategoryShared(cache['category_id']) # Boolean if false. Dict if true
                                 if checkCachedCategory == False and not checkCategory:
-                                    logging.debug('[TRANSACTION] Invalid Transaction. Transaction is not in a Shared Category')
+                                    logger.debug('[TRANSACTION] Invalid Transaction. Transaction is not in a Shared Category')
                                     return
                                 
                                 # If both cached and new categories are shared, but not in the same category
                                 if checkCachedCategory != False and checkCategory and not checkCachedAccount and not checkAccount:
                                     if sub['category_id'] != cache['category_id']:
-                                        logging.debug('[TRANSACTION] Shared transction changed category. Adjusting amounts')
+                                        logger.debug('[TRANSACTION] Shared transction changed category. Adjusting amounts')
                                         amount = sub['amount'] # For existing item
                                         olditem = cache
                                         olditem.update({'budget_id':meta['id'], 
@@ -592,25 +630,25 @@ def checkTransaction(item):
                                         if olditem['amount'] != 0:
                                             output.append(olditem)
                                         else:
-                                            logging.debug('[TRANSACTION] Transaction amount is 0. Skipping')
+                                            logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
 
                                 # If category is moved from a regular one to a shared one. Parsed as a normal transaction
                                 if checkCachedCategory == False and checkCategory and not checkCachedAccount and not checkAccount:
-                                    logging.debug('[TRANSACTION] Transaction moved from a regular category to a shared category.')
+                                    logger.debug('[TRANSACTION] Transaction moved from a regular category to a shared category.')
                                     amount = sub['amount'] # For existing item
 
                                 # If transaction is moved from Delta account to regular account (Parsed as normal transaction)
                                 if checkCategory and not checkAccount and checkCachedAccount:
-                                    logging.debug('[TRANSACTION] Transaction moved from Delta account to other account')
+                                    logger.debug('[TRANSACTION] Transaction moved from Delta account to other account')
                                     amount = sub['amount']
 
                                 # If transaction is moved from regular account to delta account (Parsed as normal transaction)
                                 #if checkCachedCategory and checkAccount and not checkCachedAccount:
-                                #    logging.critical('[TRANSACTION][ERROR] Transaction moved to a delta account!!!')
+                                #    logger.critical('[TRANSACTION][ERROR] Transaction moved to a delta account!!!')
 
                                 # If a category is moved from a shared one to a regular one. Parsed as a deleted transaction
                                 if checkCachedCategory != False and not checkCategory and not checkCachedAccount and not checkAccount:
-                                    logging.debug('[TRANSACTION] Transaction moved from a shared category to a regular one.')
+                                    logger.debug('[TRANSACTION] Transaction moved from a shared category to a regular one.')
                                     olditem = cache
                                     olditem.update({'budget_id':meta['id'], 
                                                 'budget_name':meta['name'], 
@@ -623,15 +661,15 @@ def checkTransaction(item):
                                     if olditem['amount'] != 0:
                                         output.append(olditem)
                                     else:
-                                        logging.debug('[TRANSACTION] Transaction amount is 0. Skipping')
+                                        logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
                                     SkipTransaction = True
 
                                 ## Final touches before sending off
                                 # If amount wasn't changed it means it was in cache but in the same category and 
                                 if amount == None:
-                                    logging.debug('[TRANSACTION] Transaction changed but Category didnt. Changing amount.')
+                                    logger.debug('[TRANSACTION] Transaction changed but Category didnt. Changing amount.')
                                     amount = sub['amount'] - cache['amount']
-                                    logging.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
+                                    logger.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
                                 sub.update({'amount':amount})
                                 if sub['memo'] != None:
                                     sub.update({'memo':sub['memo'] + ' (Adjusted)'})
@@ -642,7 +680,7 @@ def checkTransaction(item):
 
                         # If it doesn't exist in the cache and isn't shared skip it
                         if not exists and not checkCategory and checkAccount:
-                            logging.debug('[TRANSACTION] Transaction is brand new, but not in a shared Category or might be in a Delta Account.')
+                            logger.debug('[TRANSACTION] Transaction is brand new, but not in a shared Category or might be in a Delta Account.')
                             return
                         ## END HANDLE EDITS
 
@@ -667,7 +705,7 @@ def checkTransaction(item):
                         if x['amount'] != 0:
                             output.append(x)
                         else:
-                            logging.debug('[TRANSACTION] Subransaction amount is 0. Skipping')
+                            logger.debug('[TRANSACTION] Subransaction amount is 0. Skipping')
         if output != []:
             return output
 
@@ -746,13 +784,13 @@ def sendBulkTransactions(bulk):
             send.append({'url':url, 'data':data, 'target':targetbudget})
 
     if send == []:
-        logging.info('[SCRIPT] 0 new transactions.')
+        logger.info('[SCRIPT] 0 new transactions.')
 
     recover = False
     for i in send:
         req = requestData(i['url'], i['data'], {'Content-Type': 'application/json', 'Content-Length': len(i['data'])})
         response = fetchData(req)
-        logging.info(response.read())
+        logger.info(response.read())
 
         # Remove queue on successful run
         path = str('caches/' + i['target'] + '.queue')
@@ -794,7 +832,7 @@ def verifyTransaction(tr):
             if tr['note'] == categories['note'] and tr['category_id'] != categories['id']:
                 if categories['budget_id'] == budgets['budget_id']:
                     # Debug message
-                    logging.debug(('[TRANSACTION] Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name']).encode('utf8'))
+                    logger.debug(('[TRANSACTION] Found a match ' + tr['category_name'] + ' matches: ' + categories['name'] + ', In Budget ' + budgets['budget_name']).encode('utf8'))
 
                     # Variables of necessary data
                     for delta in AllDeltaAccounts:
@@ -838,11 +876,11 @@ def parseWhitelist():
             z = True
             for y in Whitelist:
                 if x['id'] == y or x['name'] == y:
-                    logging.debug('[WHITELIST] Whitelisted: ' + MasterJSON[val]['data']['budgets'][i]['name'])
+                    logger.debug('[WHITELIST] Whitelisted: ' + MasterJSON[val]['data']['budgets'][i]['name'])
                     z = False
                     break
             if z:
-                logging.debug('[WHITELIST] Skipping: ' + MasterJSON[val]['data']['budgets'][i]['name'])
+                logger.debug('[WHITELIST] Skipping: ' + MasterJSON[val]['data']['budgets'][i]['name'])
                 del MasterJSON[val]['data']['budgets'][i]
                 continue
             i += 1
@@ -857,13 +895,13 @@ def parseTransactions(jointTransactions):
         if tr != None:
             if tr['deleted']:
                 if IncludeDeleted == True:
-                    logging.debug('[TRANSACTION] Deleted Transaction Found. Parsing in negative amount')
+                    logger.debug('[TRANSACTION] Deleted Transaction Found. Parsing in negative amount')
                     tr.update({ 'amount':-1*(tr['amount']),
                                 'memo':'DELETED TRANSACTION',
                                 'payee_name':'Deleted'})
                     output.extend(verifyTransaction(tr))
             else:
-                logging.debug(('[TRANSACTION] Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name']).encode('utf8'))
+                logger.debug(('[TRANSACTION] Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name']).encode('utf8'))
                 output.extend(verifyTransaction(tr))
     sendBulkTransactions(output)
 
@@ -891,7 +929,9 @@ def createConfig(path):
     config.set('Meta', 'X-Rate-Treshold', 20)
     # Debug
     config.add_section('Debug')
-    config.set('Debug', 'Verbose-Output', '1')
+    config.set('Debug', '# Verbose Output changes log from INFO to DEBUG')
+    config.set('Debug', 'Verbose-File-Output', '1')
+    config.set('Debug', 'Verbose-Stream-Output', '0')
     # Write config if empty
     if path != '':
         with open(path, 'wb') as configfile:
@@ -901,7 +941,7 @@ def createConfig(path):
 # Config
 # Creates a config file if it doesn't exist
 if not os.path.exists('YNAB_Shared_Categories.cfg'):
-        logging.info('[INITIALIZE] Creating YNAB_Shared_Categories.cfg')
+        logger.info('[INITIALIZE] Creating YNAB_Shared_Categories.cfg')
         createConfig('YNAB_Shared_Categories.cfg')
         sys.exit('YNAB_Shared_Categories.cfg was created. Add your Access Token to this file')
 
@@ -930,41 +970,40 @@ AutoApprove     = config.getboolean('Options', 'Automatic-Approval')
 # Meta
 XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 # Debug
-if config.getboolean('Debug','Verbose-Output'): 
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
-else:
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = YNABLog()
+logger.verbose(logger.filelog, config.getboolean('Debug','Verbose-File-Output'))
+logger.verbose(logger.streamlog, config.getboolean('Debug','Verbose-Stream-Output'))
 
 ##############
 # SCRIPT START
 ##############
-logging.info('[SCRIPT] Starting script')
+logger.info('[SCRIPT] Starting script')
 start_time = time.time()
-logging.info('[SCRIPT] Backing up existing caches')
+logger.info('[SCRIPT] Backing up existing caches')
 backupTransactionsCache()
-logging.info('[SCRIPT] Done')
-logging.info('[SCRIPT] Grabbing MasterJSON')
+logger.info('[SCRIPT] Done')
+logger.info('[SCRIPT] Grabbing MasterJSON')
 MasterJSON = YNAB_Fetch('')
-logging.info('[SCRIPT] Grabbed MasterJSON')
+logger.info('[SCRIPT] Grabbed MasterJSON')
 if Whitelist != ['']:
-    logging.info('[SCRIPT][OPTIONAL] Whitelist found. Parsing Whitelist')
+    logger.info('[SCRIPT][OPTIONAL] Whitelist found. Parsing Whitelist')
     parseWhitelist()
-    logging.info('[SCRIPT][OPTIONAL] Done parsing Whitelist')
-logging.info('[SCRIPT] Grabbing Shared Account IDs')
+    logger.info('[SCRIPT][OPTIONAL] Done parsing Whitelist')
+logger.info('[SCRIPT] Grabbing Shared Account IDs')
 AllDeltaAccounts = getAllDeltaAccounts()
-logging.info('[SCRIPT] All Shared Account IDs grabbed.')
-logging.info('[SCRIPT] Grabbing Shared Category IDs')
+logger.info('[SCRIPT] All Shared Account IDs grabbed.')
+logger.info('[SCRIPT] Grabbing Shared Category IDs')
 AllSharedCategories = getAllSharedCategories()
-logging.info('[SCRIPT] All Shared Category IDs grabbed.')
+logger.info('[SCRIPT] All Shared Category IDs grabbed.')
 transactions = []
-logging.info('[SCRIPT] Grabbing new transactions.')
+logger.info('[SCRIPT] Grabbing new transactions.')
 for i, item in enumerate(AllDeltaAccounts, start=1):
     transactions.extend(getNewJointTransactions(item['budget_id']))
-    logging.debug(('[TRANSACTION] Finished grabbing transactions from ' + item['budget_name'] + ' (' + str(i) + '/' + str(len(AllDeltaAccounts)) + ')').encode('utf8'))
-logging.info('[SCRIPT] Finished grabbing transactions.')    
-logging.info('[SCRIPT] Sending new transactions to parser, if any')
+    logger.debug(('[TRANSACTION] Finished grabbing transactions from ' + item['budget_name'] + ' (' + str(i) + '/' + str(len(AllDeltaAccounts)) + ')').encode('utf8'))
+logger.info('[SCRIPT] Finished grabbing transactions.')    
+logger.info('[SCRIPT] Sending new transactions to parser, if any')
 parseTransactions(transactions)
-logging.info('[SCRIPT] Completed parsing of transactions')
-logging.info('[SCRIPT] Completed script. Cleaning up')
+logger.info('[SCRIPT] Completed parsing of transactions')
+logger.info('[SCRIPT] Completed script. Cleaning up')
 removeDeletedBudgets()
-logging.info("[SCRIPT] Script finished execution after %s seconds " % round((time.time() - start_time),2))
+logger.info("[SCRIPT] Script finished execution after %s seconds " % round((time.time() - start_time),2))
