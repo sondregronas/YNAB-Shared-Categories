@@ -1,3 +1,5 @@
+# CHANGE THIS TO AUTOQUEUE NEW CACHES
+CACHEVERSION = 100
     #####
     #
     # Todo
@@ -55,19 +57,32 @@ def YNAB(param, accesstoken):
 def YNAB_ParseCache(param):
     '''
     Reads cache file based on YNAB API Parameter (param) as if it's from the YNAB servers.
-    Cache reconstructs itself if corrupt
+    Cache reconstructs itself if corrupt or if cacheversion is invalid
     Returns json data
     '''
     path = getCachePath(param)
-    with open(path) as f:
-        try:
-            data = json.load(f)
-        except ValueError:
-            x = (path.split('/')[1]).split('.')[0]
-            logging.error('[ERROR] Corrupt file ' + path + '. Fetching new from YNAB.')
-            data = YNAB_Fetch(x)
-            writeCache(data,x)
-    return data
+    i = 0
+    attempts = 10
+    while i < attempts:
+        i = i+1
+        with open(path) as f:
+            try:
+                data = json.load(f)
+            except ValueError:
+                logging.error('[ERROR] Corrupt file ' + path + '. Fetching new from YNAB.')
+                x = param.split('?')[0]
+                data = YNAB_Fetch(x)
+                logging.error('[CACHE] Cache restored. Retrying.')
+                continue
+            if data['cacheversion'] != CACHEVERSION and path.endswith('.cache'):
+                logging.error('[CACHE] Cache version incorrect. Fetching new cache from YNAB')
+                x = param.split('?')[0]
+                data = YNAB_Fetch(x)
+                logging.error('[CACHE] Cache updated. Retrying.')
+                continue
+        return data
+    logging.critical('[CACHE] Cache failed to load / repair itself')
+    sys.exit('CACHE Failed to load / repair itself')
 
 def removekey(d, key):
     '''
@@ -178,7 +193,7 @@ def YNAB_Fetch(param, accesstoken=None):
     '''
     Takes YNAB API Parameter (param) and an optional singular accesstoken (accesstoken=X)
     Grabs data from the YNAB server and writes it to cache.
-    Also adds accesstoken to cache with key: 'token'
+    Also adds accesstoken to cache with key: 'token' and CACHEVERSION with key: 'cacheversion'
     Returns dictionaries of data (Single dictionary with specified accesstoken)
     '''
     O = []
@@ -187,7 +202,8 @@ def YNAB_Fetch(param, accesstoken=None):
             Y = accesstoken
         url = getURL(param, Y)
         data = json.load(fetchData(url))
-        data.update({'token':Y})
+        data.update({'token':Y,
+                    'cacheversion':CACHEVERSION})
         O.append(data)
         if param != '':
             writeCache(data,param)
@@ -385,9 +401,12 @@ def checkTransaction(item):
                         if item['id'] == cache['id']:
                             logging.debug('[TRANSACTION] Transaction already exists. Adjusting amount')
                             amount = item['amount'] - cache['amount']
+                            item.update({'amount':amount})
+                            if item['memo'] != None:
+                                item.update({'memo':item['memo'] + ' (Adjusted)'})
+                            else:
+                                item.update({'memo':'(Adjusted)'})
                             logging.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
-                            item.update({'amount':amount,
-                                        'memo':item['memo'] + ' (Adjusted)'})
                             break
 
                 item.update({'budget_id':checkCategory['budget_id'], 
@@ -414,9 +433,12 @@ def checkTransaction(item):
                             if sub['id'] == cache['id']:
                                 logging.debug('[TRANSACTION] Subtransaction already exists. Adjusting amount')
                                 amount = sub['amount'] - cache['amount']
+                                sub.update({'amount':amount})
+                                if sub['memo'] != None:
+                                    sub.update({'memo':sub['memo'] + ' (Adjusted)'})
+                                else:
+                                    sub.update({'memo':'(Adjusted)'})
                                 logging.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(sub['amount']) + '. New sum: ' + str(amount))
-                                sub.update({'amount':amount,
-                                            'memo':sub['memo'] + ' (Adjusted)'})
                                 break
 
                     x = removekey(item, 'subtransactions')
