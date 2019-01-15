@@ -347,20 +347,29 @@ def getAllSharedCategories(): # Needs Caching & Delta
 def getAllDeltaAccounts():
     output = []
     # Grabbing all Delta Account IDs
+    updatecount = 0
     for M in MasterJSON:
         for item in M['data']['budgets']:
             if os.path.isfile(str('caches/' + item['id'] + '.cache')) == True:
-                logger.debug(('[CACHE] Checking for updates in ' + item['name']).encode('utf8'))
-                getBudgetUpdates(item['id'], M['token'])
+                logger.debug(('[CACHE] Found existing cache in ' + item['name'] + ' checking for updates before proceeding').encode('utf8'))
+                x = getBudgetUpdates(item['id'], M['token'])
+                if x == False:
+                    logger.debug(('[BUDGET] No updates in ' + item['name']).encode('utf8'))
+                else:
+                    updatecount += 1
+            else:
+                updatecount += 1
 
-            logger.debug(('[BUDGET] Checking for Delta Accounts in ' + item['name']).encode('utf8'))
             json = YNAB(item['id'], M['token'])
             acc = findAccountByNote(AccountSyntax, json)
             if acc != None and acc['deleted'] == False:
-                logger.debug(('[ACCOUNT] Found Account: ' + acc['name'] + ' from budget: ' + item['name']).encode('utf8'))
+                logger.info(('[ACCOUNT] Found Account: ' + acc['name'] + ' from budget: ' + item['name']).encode('utf8'))
                 acc.update({'budget_name':item['name'], 'budget_id':item['id']})
                 output.append(acc)
-    return output
+    if updatecount != 0:
+        return output
+    else:
+        return False
 
 # Used by newTransactions parser to see if the new transaction is from a shared category
 # Checks if the Category ID is in the SharedCategories list
@@ -382,30 +391,10 @@ def isAccountDelta(id): # Works
             sys.exit('[CRITICAL] Delta account is on a tracking account!')
     return False
 
-def isAccountOnBudget(id):
-    for i in AllBudgetAccounts:
-        if i['id'] == id and i['on_budget']:
-            return True
-        if i['id'] == id and not i['on_budget']:
-            return False
-
-def getAllBudgetAccounts():
-    output = []
-    for M in MasterJSON:
-        amount = 0
-        for X in M['data']['budgets']:
-            Y = YNAB(X['id'], M['token'])
-            for y in Y['data']['budget']['accounts']:
-                if y['on_budget']:
-                    logger.debug(('[BUDGET] Found budget account: ' + y['name']).encode('utf8'))
-                    amount += 1
-                    output.append(y)
-            logger.info(('[TRANSACTION] Finished grabbing budget accounts from ' + X['name'] + ' Found ' + str(amount) + ' accounts.').encode('utf8'))
-    if output != []:
-        return output
-    logger.critical('[CRITICAL] No accounts on budget.')
-    sys.exit('[CRITICAL] No accounts on budget.')
-    
+def isAccountOnBudget(category_id):
+    if category_id != None:
+        return True
+    return False
 
 # Returns the account data if note is found in string. Used to find all entities with the AccountModifier
 def findAccountByNote(note, json): # FINISHED
@@ -449,14 +438,11 @@ def getNoteByCategoryId(id):
             return x['note']
 
 # Updates new Accounts and Categories dictionaries to the old dictionary
-def mergeDicts(old, changes):
-    X = ['accounts',
-        'categories',
-        'transactions',
-        'subtransactions']
-
-    for x in X:
+def mergeDicts(old, changes, check=['accounts','categories','transactions','subtransactions']):
+    updatecount = 0
+    for x in check:
         if changes['data']['budget'][x] != []:
+            updatecount += 1
             oldamount = 0
             newamount = 0
             for d1 in changes['data']['budget'][x]:
@@ -473,11 +459,17 @@ def mergeDicts(old, changes):
                     newamount += 1
             if oldamount >= 1 or newamount >= 1:
                 logger.debug(('[CACHE] Updated ' + str(oldamount) + ' and added ' + str(newamount) + ' new ' + x).encode('utf8'))
+    if updatecount == 0:
+        return False
     old['data']['server_knowledge'] = changes['data']['server_knowledge']
     return old
 
 # Fetches new data & adds it to the cache
 def getBudgetUpdates(budget_id, accesstoken):
+    check = ['accounts',
+        'categories',
+        'transactions',
+        'subtransactions']
     param = budget_id+'?last_knowledge_of_server='
     path = getCachePath(param)
     if os.path.isfile(path):
@@ -489,16 +481,18 @@ def getBudgetUpdates(budget_id, accesstoken):
     param = param + str(x)
     url = getURL(param, accesstoken)
     data = json.load(fetchData(url))
-    data = mergeDicts(main,data)
+    data = mergeDicts(main,data,check=check)
     if data != False:
         writeCache(data, str(budget_id))
+    else:
+        return False
 
 # Checks if a transaction is in a shared category, and not in a delta account
 # Also parses Split transactions as separate entries
 def checkTransaction(item, cache='transactions'):
     checkAccount = isAccountDelta(item['account_id'])
     meta = getBudgetInfoByAccountId(item['account_id'])
-    AccountOnBudget = isAccountOnBudget(item['account_id'])
+    AccountOnBudget = isAccountOnBudget(item['category_id'])
     if cache == 'subtransactions' or item['subtransactions'] == []:
         logger.debug('[TRANSCATION] Checking new ' + cache[0:-1])
         checkCategory = isCategoryShared(item['category_id']) # Boolean if false. Dict if true
@@ -849,6 +843,8 @@ def parseTransactions(jointTransactions):
                                 'memo':'DELETED TRANSACTION',
                                 'payee_name':'Deleted'})
                     output.extend(verifyTransaction(tr))
+                else:
+                    logger.warn('[TRANSACTION] A transaction in a shared category ID was deleted, but Detect-Deleted is turned off.')
             else:
                 logger.debug(('[TRANSACTION] Account: ' + tr['account_name'] + '. Category: ' + tr['category_name'] + '. From budget: ' + tr['budget_name']).encode('utf8'))
                 output.extend(verifyTransaction(tr))
@@ -925,40 +921,52 @@ logger.verbose(logger.filelog, config.getboolean('Debug', 'Verbose-File-Output')
 logger.verbose(logger.streamlog, config.getboolean('Debug', 'Verbose-Stream-Output'))
 logger.enable(config.getboolean('Debug', 'Enable-File-Log'))
 
+def main():
+    logger.info('[SCRIPT] Backing up existing caches')
+    backupTransactionsCache()
+    logger.info('[SCRIPT] Done')
+
+    logger.info('[SCRIPT] Grabbing MasterJSON')
+    global MasterJSON
+    MasterJSON = YNAB_Fetch('')
+    logger.info('[SCRIPT] Grabbed MasterJSON')
+
+    if Whitelist != ['']:
+        logger.info('[SCRIPT][OPTIONAL] Whitelist found. Parsing Whitelist')
+        parseWhitelist()
+        logger.info('[SCRIPT][OPTIONAL] Done parsing Whitelist')
+
+    logger.info('[SCRIPT] Grabbing Shared Delta Account IDs')
+    global AllDeltaAccounts
+    AllDeltaAccounts = getAllDeltaAccounts()
+    if not AllDeltaAccounts:
+        logger.info('[BUDGET] Zero updates were found. No reason to progress script.')
+        return
+    logger.info('[SCRIPT] All Shared Delta Account IDs grabbed.')
+
+    logger.info('[SCRIPT] Grabbing Shared Category IDs')
+    global AllSharedCategories
+    AllSharedCategories = getAllSharedCategories()
+    logger.info('[SCRIPT] All Shared Category IDs grabbed.')
+
+    logger.info('[SCRIPT] Grabbing new transactions.')
+    transactions = []
+    for i, item in enumerate(AllDeltaAccounts, start=1):
+        transactions.extend(getNewJointTransactions(item['budget_id']))
+        logger.info(('[TRANSACTION] Finished grabbing transactions from ' + item['budget_name'] + ' (' + str(i) + '/' + str(len(AllDeltaAccounts)) + ')').encode('utf8'))
+    logger.info('[SCRIPT] Finished grabbing transactions.')    
+
+    logger.info('[SCRIPT] Sending new transactions to parser, if any')
+    parseTransactions(transactions)
+    logger.info('[SCRIPT] Completed parsing of transactions')
+
 ##############
 # SCRIPT START
 ##############
+start_time = time.time()
 logger.info('------------------------------------------------------')
 logger.info('[SCRIPT] Starting script')
-start_time = time.time()
-logger.info('[SCRIPT] Backing up existing caches')
-backupTransactionsCache()
-logger.info('[SCRIPT] Done')
-logger.info('[SCRIPT] Grabbing MasterJSON')
-MasterJSON = YNAB_Fetch('')
-logger.info('[SCRIPT] Grabbed MasterJSON')
-if Whitelist != ['']:
-    logger.info('[SCRIPT][OPTIONAL] Whitelist found. Parsing Whitelist')
-    parseWhitelist()
-    logger.info('[SCRIPT][OPTIONAL] Done parsing Whitelist')
-logger.info('[SCRIPT] Grabbing Shared Delta Account IDs')
-AllDeltaAccounts = getAllDeltaAccounts()
-logger.info('[SCRIPT] All Shared Delta Account IDs grabbed.')
-logger.info('[SCRIPT] Grabbing Budget Accounts')
-AllBudgetAccounts = getAllBudgetAccounts()
-logger.info('[SCRIPT] All Budgets grabbed.')
-logger.info('[SCRIPT] Grabbing Shared Category IDs')
-AllSharedCategories = getAllSharedCategories()
-logger.info('[SCRIPT] All Shared Category IDs grabbed.')
-transactions = []
-logger.info('[SCRIPT] Grabbing new transactions.')
-for i, item in enumerate(AllDeltaAccounts, start=1):
-    transactions.extend(getNewJointTransactions(item['budget_id']))
-    logger.info(('[TRANSACTION] Finished grabbing transactions from ' + item['budget_name'] + ' (' + str(i) + '/' + str(len(AllDeltaAccounts)) + ')').encode('utf8'))
-logger.info('[SCRIPT] Finished grabbing transactions.')    
-logger.info('[SCRIPT] Sending new transactions to parser, if any')
-parseTransactions(transactions)
-logger.info('[SCRIPT] Completed parsing of transactions')
+main()
 logger.info('[SCRIPT] Completed script. Cleaning up')
 removeDeletedBudgets()
 logger.info("[SCRIPT] Script finished execution after %s seconds " % round((time.time() - start_time),2))
