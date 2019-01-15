@@ -508,8 +508,11 @@ def checkTransaction(item):
                 exists = False
                 # Check if ID is in transactions cache.
                 # NEED TO CLEAN HANDLEEDITS!!!
+
                 if (item['deleted'] and not checkCategory) or not AccountOnBudget:
+                    logger.debug('[TRANSACTION] Deleted, but not in a shared category or in a tracking account')
                     SkipTransaction = True
+
                 if HandleEdits:
                     for cache in (YNAB_ParseCache(meta['id']+'.cache.backup'))['data']['budget']['transactions']:
                         if item['id'] == cache['id']:
@@ -540,13 +543,13 @@ def checkTransaction(item):
                                                 'payee_name':'Delta',
                                                 'date':item['date'],
                                                 'amount':cache['amount']*-1})
-                                    if olditem['amount'] != 0:
+                                    if olditem['amount'] != 0 and olditem['amount'] != None:
                                         output.append(olditem)
                                     else:
                                         logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
 
                             # If category is moved from a regular one to a shared one. Parsed as a normal transaction
-                            if checkCachedCategory == False and checkCategory and not checkCachedAccount and not checkAccount:
+                            if checkCachedCategory == False and checkCategory and not checkCachedAccount and not checkAccount and not item['deleted']:
                                 logger.debug('[TRANSACTION] Transaction moved from a regular category to a shared category.')
                                 amount = item['amount'] # For existing item
 
@@ -571,7 +574,7 @@ def checkTransaction(item):
                                             'payee_name':'Delta',
                                             'date':item['date'],
                                             'amount':cache['amount']*-1})
-                                if olditem['amount'] != 0:
+                                if olditem['amount'] != 0 and olditem['amount'] != None:
                                     output.append(olditem)
                                 else:
                                     logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
@@ -579,20 +582,20 @@ def checkTransaction(item):
 
                             ## Final touches before sending off
                             # If amount wasn't changed it means it was in cache but in the same category and 
-                            if amount == None:
+                            if amount == None and not item['deleted']:
                                 logger.debug('[TRANSACTION] Transaction changed but Category didnt. Changing amount.')
                                 amount = item['amount'] - cache['amount']
                                 logger.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
-                            item.update({'amount':amount})
-                            if item['memo'] != None:
-                                item.update({'memo':item['memo'] + ' (Adjusted)'})
-                            else:
-                                item.update({'memo':'(Adjusted)'})
+                                item.update({'amount':amount})
+                                if item['memo'] != None:
+                                    item.update({'memo':item['memo'] + ' (Adjusted)'})
+                                else:
+                                    item.update({'memo':'(Adjusted)'})
                             # Break the loop after execution
                             break
 
                     # If it doesn't exist in the cache and isn't shared skip it
-                    if not exists and not checkCategory and checkAccount:
+                    if not exists and (not checkCategory or checkAccount):
                         logger.debug('[TRANSACTION] Transaction is brand new, but not in a shared Category or might be in a Delta Account.')
                         return
                     ## END HANDLE EDITS
@@ -602,11 +605,12 @@ def checkTransaction(item):
                     parsebool = True
 
                 if not SkipTransaction and parsebool:
+                    logger.debug('[TRANSCATION] Transaction is new.')
                     item.update({'budget_id':meta['id'],
                                 'budget_name':meta['name'], 
                                 'date':item['date'],
                                 'note':getNoteByCategoryId(item['category_id'])})
-                    if item['amount'] != 0:
+                    if item['amount'] != 0 and item['amount'] != None: 
                         output.append(item)
                     else:
                         logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
@@ -629,8 +633,10 @@ def checkTransaction(item):
                     # Check if ID is in transactions cache.
                     logger.error('!!! ACCOUNT HANDLING NOT YET SUPPORTED IN SUBTRANSACTIONS !!!')
                     # NEED TO CLEAN HANDLEEDITS!!!
-                    if sub['deleted'] and not checkCategory:
+
+                    if sub['deleted'] or not checkCategory:
                         SkipTransaction = True
+
                     if HandleEdits:
                         for cache in (YNAB_ParseCache(meta['id']+'.cache.backup'))['data']['budget']['subtransactions']:
                             if sub['id'] == cache['id']:
@@ -661,13 +667,13 @@ def checkTransaction(item):
                                                     'payee_name':'Delta',
                                                     'date':item['date'],
                                                     'amount':cache['amount']*-1})
-                                        if olditem['amount'] != 0:
+                                        if olditem['amount'] != 0 and olditem['amount'] != None:
                                             output.append(olditem)
                                         else:
                                             logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
 
                                 # If category is moved from a regular one to a shared one. Parsed as a normal transaction
-                                if checkCachedCategory == False and checkCategory and not checkCachedAccount and not checkAccount:
+                                if checkCachedCategory == False and checkCategory and not checkCachedAccount and not checkAccount and not sub['deleted']:
                                     logger.debug('[TRANSACTION] Transaction moved from a regular category to a shared category.')
                                     amount = sub['amount'] # For existing item
 
@@ -692,7 +698,7 @@ def checkTransaction(item):
                                                 'payee_name':'Delta',
                                                 'date':item['date'],
                                                 'amount':cache['amount']*-1})
-                                    if olditem['amount'] != 0:
+                                    if olditem['amount'] != 0 and olditem['amount'] != None:
                                         output.append(olditem)
                                     else:
                                         logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
@@ -704,16 +710,16 @@ def checkTransaction(item):
                                     logger.debug('[TRANSACTION] Transaction changed but Category didnt. Changing amount.')
                                     amount = sub['amount'] - cache['amount']
                                     logger.debug('[TRANSACTION] Amount changed. Old amount: ' + str(cache['amount']) + ' New: ' + str(item['amount']) + '. New sum: ' + str(amount))
-                                sub.update({'amount':amount})
-                                if sub['memo'] != None:
-                                    sub.update({'memo':sub['memo'] + ' (Adjusted)'})
-                                else:
-                                    sub.update({'memo':'(Adjusted)'})
+                                    sub.update({'amount':amount})
+                                    if sub['memo'] != None:
+                                        sub.update({'memo':sub['memo'] + ' (Adjusted)'})
+                                    else:
+                                        sub.update({'memo':'(Adjusted)'})
                                 # Break the loop after execution
                                 break
 
                         # If it doesn't exist in the cache and isn't shared skip it
-                        if not exists and not checkCategory and checkAccount:
+                        if not exists and (not checkCategory or checkAccount):
                             logger.debug('[TRANSACTION] Transaction is brand new, but not in a shared Category or might be in a Delta Account.')
                             return
                         ## END HANDLE EDITS
@@ -736,7 +742,7 @@ def checkTransaction(item):
                             'date':item['date'],
                             'memo':sub['memo'] + ' (Split)'
                         })
-                        if x['amount'] != 0:
+                        if x['amount'] != 0 and x['amount'] != None:
                             output.append(x)
                         else:
                             logger.debug('[TRANSACTION] Subransaction amount is 0. Skipping')
