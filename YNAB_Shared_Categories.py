@@ -5,6 +5,7 @@ CACHEVERSION = 100
     # Todo
     # Web hosting
     # Sync budgeted amount
+    # Support for Tracking accounts
     #
     #####
 
@@ -42,21 +43,25 @@ class YNABLog:
             log.setLevel(logging.DEBUG)
         else:
             log.setLevel(logging.INFO)
+    def enable(self, bool):
+        if bool:
+            # Filelog
+            fileloghandler = RotatingFileHandler('YNAB.log', mode='a', maxBytes=5*1024*1024, backupCount=2, encoding=None, delay=0)
+            fileloghandler.setFormatter(self.logformat)
+            self.filelog.addHandler(fileloghandler)
+            self.streamlog.enabled = False
+            self.logs.add(self.filelog)
     def __init__(self):
-        logformat = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        self.logformat = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         # Streamlog
-        self.streamlog = logging.getLogger('Main')
+        self.streamlog = logging.getLogger('STREAM')
         streamloghandler = logging.StreamHandler()
-        streamloghandler.setFormatter(logformat)
+        streamloghandler.setFormatter(self.logformat)
         self.streamlog.addHandler(streamloghandler)
-        # Filelog
+        
         self.filelog = logging.getLogger('YNAB')
-        fileloghandler = RotatingFileHandler('YNAB.log', mode='a', maxBytes=5*1024*1024, backupCount=2, encoding=None, delay=0)
-        fileloghandler.setFormatter(logformat)
-        self.filelog.addHandler(fileloghandler)
         # Dict
-        self.logs = {self.streamlog,
-                    self.filelog}
+        self.logs = {self.streamlog}
 
 def getCachePath(param):
     '''
@@ -362,9 +367,38 @@ def isCategoryShared(id):
 # Checks if the Account ID is in the DeltaAccounts list
 def isAccountDelta(id): # Works
     for i in AllDeltaAccounts:
-        if i['id'] == id:
+        if i['id'] == id and i['on_budget']:
             return True
+        if i['id'] == id and not i['on_budget']:
+            logger.critical('[CRITICAL] Delta account is on a tracking account, change to a budget account!!')
+            recoverTransactions()
+            sys.exit('[CRITICAL] Delta account is on a tracking account!')
     return False
+
+def isAccountOnBudget(id):
+    for i in AllBudgetAccounts:
+        if i['id'] == id and i['on_budget']:
+            return True
+        if i['id'] == id and not i['on_budget']:
+            return False
+
+def getAllBudgetAccounts():
+    output = []
+    for M in MasterJSON:
+        amount = 0
+        for X in M['data']['budgets']:
+            Y = YNAB(X['id'], M['token'])
+            for y in Y['data']['budget']['accounts']:
+                if y['on_budget']:
+                    logger.debug(('[BUDGET] Found budget account: ' + y['name']).encode('utf8'))
+                    amount += 1
+                    output.append(y)
+            logger.info(('[TRANSACTION] Finished grabbing budget accounts from ' + X['name'] + ' Found ' + str(amount) + ' accounts.').encode('utf8'))
+    if output != []:
+        return output
+    logger.critical('[CRITICAL] No accounts on budget.')
+    sys.exit('[CRITICAL] No accounts on budget.')
+    
 
 # Returns the account data if note is found in string. Used to find all entities with the AccountModifier
 def findAccountByNote(note, json): # FINISHED
@@ -455,11 +489,12 @@ def getBudgetUpdates(budget_id, accesstoken):
 # Checks if a transaction is in a shared category, and not in a delta account
 # Also parses Split transactions as separate entries
 def checkTransaction(item):
+    checkAccount = isAccountDelta(item['account_id'])
+    meta = getBudgetInfoByAccountId(item['account_id'])
+    AccountOnBudget = isAccountOnBudget(item['account_id'])
     if item['subtransactions'] == []:
         logger.debug('[TRANSCATION] Checking new transaction')
         checkCategory = isCategoryShared(item['category_id']) # Boolean if false. Dict if true
-        checkAccount = isAccountDelta(item['account_id'])
-        meta = getBudgetInfoByAccountId(item['account_id'])
         if checkCategory != False or HandleEdits:
             if not checkAccount or HandleEdits:
 
@@ -473,7 +508,7 @@ def checkTransaction(item):
                 exists = False
                 # Check if ID is in transactions cache.
                 # NEED TO CLEAN HANDLEEDITS!!!
-                if item['deleted'] and not checkCategory:
+                if (item['deleted'] and not checkCategory) or not AccountOnBudget:
                     SkipTransaction = True
                 if HandleEdits:
                     for cache in (YNAB_ParseCache(meta['id']+'.cache.backup'))['data']['budget']['transactions']:
@@ -576,14 +611,13 @@ def checkTransaction(item):
                     else:
                         logger.debug('[TRANSACTION] Transaction amount is 0. Skipping')
                 if output != []:
+                    logger.debug('[TRANSCATION] Transaction check complete. Adding to output')
                     return output
     else:
         logger.debug('[TRANSACTION] Split Transaction detected')
         output = []
         for sub in item['subtransactions']:
             checkCategory = isCategoryShared(sub['category_id']) # Boolean if false. Dict if true
-            checkAccount = isAccountDelta(item['account_id'])
-            meta = getBudgetInfoByAccountId(item['account_id'])
             if checkCategory != False or HandleEdits:
                 if not checkAccount or HandleEdits:
                     ## HANDLE EDITS
@@ -707,7 +741,9 @@ def checkTransaction(item):
                         else:
                             logger.debug('[TRANSACTION] Subransaction amount is 0. Skipping')
         if output != []:
+            logger.debug('[TRANSCATION] Transaction check complete. Adding to output')
             return output
+    logger.debug('[TRANSCATION] Transaction checking finished, not added to output')
 
 def getAccessTokenFromBudget(budget_id):
     path = getCachePath(budget_id)
@@ -932,6 +968,7 @@ def createConfig(path):
     config.set('Debug', '# Verbose Output changes log from INFO to DEBUG')
     config.set('Debug', 'Verbose-File-Output', '1')
     config.set('Debug', 'Verbose-Stream-Output', '0')
+    config.set('Debug', 'Enable-File-Log', '1')
     # Write config if empty
     if path != '':
         with open(path, 'wb') as configfile:
@@ -971,12 +1008,14 @@ AutoApprove     = config.getboolean('Options', 'Automatic-Approval')
 XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 # Debug
 logger = YNABLog()
-logger.verbose(logger.filelog, config.getboolean('Debug','Verbose-File-Output'))
-logger.verbose(logger.streamlog, config.getboolean('Debug','Verbose-Stream-Output'))
+logger.verbose(logger.filelog, config.getboolean('Debug', 'Verbose-File-Output'))
+logger.verbose(logger.streamlog, config.getboolean('Debug', 'Verbose-Stream-Output'))
+logger.enable(config.getboolean('Debug', 'Enable-File-Log'))
 
 ##############
 # SCRIPT START
 ##############
+logger.info('------------------------------------------------------')
 logger.info('[SCRIPT] Starting script')
 start_time = time.time()
 logger.info('[SCRIPT] Backing up existing caches')
@@ -989,9 +1028,12 @@ if Whitelist != ['']:
     logger.info('[SCRIPT][OPTIONAL] Whitelist found. Parsing Whitelist')
     parseWhitelist()
     logger.info('[SCRIPT][OPTIONAL] Done parsing Whitelist')
-logger.info('[SCRIPT] Grabbing Shared Account IDs')
+logger.info('[SCRIPT] Grabbing Shared Delta Account IDs')
 AllDeltaAccounts = getAllDeltaAccounts()
-logger.info('[SCRIPT] All Shared Account IDs grabbed.')
+logger.info('[SCRIPT] All Shared Delta Account IDs grabbed.')
+logger.info('[SCRIPT] Grabbing Budget Accounts')
+AllBudgetAccounts = getAllBudgetAccounts()
+logger.info('[SCRIPT] All Budgets grabbed.')
 logger.info('[SCRIPT] Grabbing Shared Category IDs')
 AllSharedCategories = getAllSharedCategories()
 logger.info('[SCRIPT] All Shared Category IDs grabbed.')
@@ -999,7 +1041,7 @@ transactions = []
 logger.info('[SCRIPT] Grabbing new transactions.')
 for i, item in enumerate(AllDeltaAccounts, start=1):
     transactions.extend(getNewJointTransactions(item['budget_id']))
-    logger.debug(('[TRANSACTION] Finished grabbing transactions from ' + item['budget_name'] + ' (' + str(i) + '/' + str(len(AllDeltaAccounts)) + ')').encode('utf8'))
+    logger.info(('[TRANSACTION] Finished grabbing transactions from ' + item['budget_name'] + ' (' + str(i) + '/' + str(len(AllDeltaAccounts)) + ')').encode('utf8'))
 logger.info('[SCRIPT] Finished grabbing transactions.')    
 logger.info('[SCRIPT] Sending new transactions to parser, if any')
 parseTransactions(transactions)
@@ -1007,3 +1049,4 @@ logger.info('[SCRIPT] Completed parsing of transactions')
 logger.info('[SCRIPT] Completed script. Cleaning up')
 removeDeletedBudgets()
 logger.info("[SCRIPT] Script finished execution after %s seconds " % round((time.time() - start_time),2))
+logger.info('------------------------------------------------------')
