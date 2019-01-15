@@ -150,15 +150,17 @@ def requestData(url, data, header):
         except urllib2.HTTPError, e:
             if i == attempts:
                 logger.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERRORCODE]'+e)
                 recoverTransactions()
                 sys.exit(e) 
-            logger.error('[ERROR] HTTP Request '+e+' Failed ' + str(i) + ' times.')
+            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times. (' + e +')')
         except urllib2.URLError, e:
             if i == attempts:
                 logger.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERRORCODE]'+e)
                 recoverTransactions()
                 sys.exit(e)
-            logger.error('[ERROR] URL Failed '+e+' ' + str(i) + ' times.')
+            logger.error('[ERROR] URL Failed ' + str(i) + ' times. (' + e +')')
         time.sleep(1)
     return req
 
@@ -177,6 +179,7 @@ def fetchData(url):
             data = urllib2.urlopen(url)
             break
         except urllib2.HTTPError, e:
+            f = ''
             if e.code == 400:
                 i = attempts
                 f = ('HTTP Error 400: Bad request, did you add a valid Access Token to the config file?')
@@ -198,20 +201,24 @@ def fetchData(url):
                 f = ('HTTP Error 500: Internal Server Error, unexpected error')
             if i == attempts:
                 logger.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERRORCODE]'+e)
                 recoverTransactions()
                 sys.exit(f) 
-            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times.')
+            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times. (' + e +')')
         except urllib2.URLError, e:
             if i == attempts:
                 logger.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERRORCODE]'+e)
                 recoverTransactions()
                 sys.exit(e)
-            logger.error('URL Failed ' + str(i) + ' times.')
+            logger.error('[ERROR] URL Failed ' + str(i) + ' times. (' + e +')')
         except httplib.BadStatusLine as e:
             if i == attempts:
-                logger.critical('[ERROR] Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERROR] (BadStatusLine) Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
+                logger.critical('[ERRORCODE]'+e)
                 recoverTransactions()
                 sys.exit(e)
+            logger.error('[ERROR] BadStatusLine Failed ' + str(i) + ' times. (' + e +')')
         time.sleep(1)
 
     xrate = data.info().get('X-Rate-Limit')
