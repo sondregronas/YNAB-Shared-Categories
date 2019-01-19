@@ -62,6 +62,7 @@ class YNABLog:
         self.filelog = logging.getLogger('YNAB')
         # Dict
         self.logs = {self.streamlog}
+logger = YNABLog()
 
 def getCachePath(param):
     '''
@@ -927,7 +928,6 @@ AutoApprove     = config.getboolean('Options', 'Automatic-Approval')
 # Meta
 XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 # Debug
-logger = YNABLog()
 logger.verbose(logger.filelog, config.getboolean('Debug', 'Verbose-File-Output'))
 logger.verbose(logger.streamlog, config.getboolean('Debug', 'Verbose-Stream-Output'))
 logger.enable(config.getboolean('Debug', 'Enable-File-Log'))
