@@ -62,7 +62,6 @@ class YNABLog:
         self.filelog = logging.getLogger('YNAB')
         # Dict
         self.logs = {self.streamlog}
-logger = YNABLog()
 
 def getCachePath(param):
     '''
@@ -128,6 +127,14 @@ def YNAB_ParseCache(param):
     logger.critical('[CACHE] Cache failed to load / repair itself')
     sys.exit('CACHE Failed to load / repair itself')
 
+def compressCache(data, Reduce=['payees','payee_locations','scheduled_transactions','months','currency_format','category_groups','date_format']):
+    for x in Reduce:
+        try:
+            data['data']['budget'].update({x:[]})
+        except KeyError:
+            continue
+    return data
+
 def removekey(d, key):
     '''
     Removes a key from dictionary nondestructively
@@ -153,13 +160,13 @@ def requestData(url, data, header):
                 logger.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e) 
-            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times. (' + e +')')
+            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times. (' + str(e) +')')
         except urllib2.URLError, e:
             if i == attempts:
                 logger.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
-            logger.error('[ERROR] URL Failed ' + str(i) + ' times. (' + e +')')
+            logger.error('[ERROR] URL Failed ' + str(i) + ' times. (' + str(e) +')')
         time.sleep(1)
     return req
 
@@ -202,19 +209,19 @@ def fetchData(url):
                 logger.critical('[ERROR] HTTP Request Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(f) 
-            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times. (' + e +')')
+            logger.error('[ERROR] HTTP Request Failed ' + str(i) + ' times. (' + str(e) +')')
         except urllib2.URLError, e:
             if i == attempts:
                 logger.critical('[ERROR] URL Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
-            logger.error('[ERROR] URL Failed ' + str(i) + ' times. (' + e +')')
+            logger.error('[ERROR] URL Failed ' + str(i) + ' times. (' + str(e) +')')
         except httplib.BadStatusLine as e:
             if i == attempts:
                 logger.critical('[ERROR] (BadStatusLine) Failed too many times (' + str(i) + ') times. Recovering backed up transactions.')
                 recoverTransactions()
                 sys.exit(e)
-            logger.error('[ERROR] BadStatusLine Failed ' + str(i) + ' times. (' + e +')')
+            logger.error('[ERROR] BadStatusLine Failed ' + str(i) + ' times. (' + str(e) +')')
         time.sleep(1)
 
     xrate = data.info().get('X-Rate-Limit')
@@ -250,6 +257,7 @@ def YNAB_Fetch(param, accesstoken=None):
         data = json.load(fetchData(url))
         data.update({'token':Y,
                     'cacheversion':CACHEVERSION})
+        compressCache(data)
         O.append(data)
         if param != '':
             writeCache(data,param)
@@ -534,7 +542,7 @@ def checkTransaction(item, key='transactions'):
                         try:
                             checkCachedAccount = isAccountDelta(cache['account_id'])
                         except KeyError:
-                            logger.error('[ERROR] CACHED TRANSACTION USES INVALID ACCOUNT ID. USING NEW TRANSACTION ACCOUNT ID INSTEAD. RESULTS MAY VARY')
+                            logger.error('[ERROR] CACHED TRANSACTION USES INVALID ACCOUNT ID. (SPLIT TRANSACTION?) USING NEW TRANSACTION ACCOUNT ID INSTEAD. RESULTS MAY VARY')
                             cache.update({'account_id':item['account_id']})
                             checkCachedAccount = isAccountDelta(item['account_id'])
 
@@ -928,6 +936,7 @@ AutoApprove     = config.getboolean('Options', 'Automatic-Approval')
 # Meta
 XRateTreshold   = config.getint('Meta', 'X-Rate-Treshold')
 # Debug
+logger = YNABLog()
 logger.verbose(logger.filelog, config.getboolean('Debug', 'Verbose-File-Output'))
 logger.verbose(logger.streamlog, config.getboolean('Debug', 'Verbose-Stream-Output'))
 logger.enable(config.getboolean('Debug', 'Enable-File-Log'))
