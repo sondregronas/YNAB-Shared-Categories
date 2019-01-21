@@ -390,11 +390,11 @@ def VerifySharedCategories():
         for Y in AllSharedCategories:
             if X['budget_id'] == Y['budget_id']:
                 o.append(Y['note'])
-        I = ({'name':X['budget_name'], 'notes':o})
+        I = ({'name':X['budget_name'], 'notes':sorted(o)})
         O.append(I)
     for X in O:
         if X['notes'] == []:
-            logger.error('No notes found in budget: ' + X['name'].encode('utf8'))
+            logger.error('No shared category modifiers found in budget: ' + X['name'].encode('utf8'))
             return False
         for Y in O:
             if X['notes'] != Y['notes']:
@@ -942,6 +942,8 @@ logger.verbose(logger.streamlog, config.getboolean('Debug', 'Verbose-Stream-Outp
 logger.enable(config.getboolean('Debug', 'Enable-File-Log'))
 
 def main():
+    global errors
+    errors = False
     logger.info('[SCRIPT] Backing up existing caches')
     backupTransactionsCache()
     logger.info('[SCRIPT] Done')
@@ -964,6 +966,7 @@ def main():
         return
     if len(AllDeltaAccounts) <= 1:
         logger.critical('[ERROR] Only 1 delta account was found, atleast 2 are required')
+        errors = True
         return
     logger.info('[SCRIPT] All Shared Delta Account IDs grabbed.')
 
@@ -972,6 +975,7 @@ def main():
     AllSharedCategories = getAllSharedCategories()
     if not VerifySharedCategories():
         logger.critical('[ERRROR] Errors with Shared Categories. Double check your category notes (See above)!!')
+        errors = True
         return
     logger.info('[SCRIPT] All Shared Category IDs grabbed.')
 
@@ -997,3 +1001,5 @@ logger.info('[SCRIPT] Completed script. Cleaning up')
 removeDeletedBudgets()
 logger.info("[SCRIPT] Script finished execution after %s seconds " % round((time.time() - start_time),2))
 logger.info('------------------------------------------------------')
+if errors:
+    sys.exit('[ERROR] - Script finished with errors. Please check the log.')
