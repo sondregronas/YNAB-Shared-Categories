@@ -1,13 +1,16 @@
 Lets you share specific categories with other people, perfect for keeping track of separate budgets for you and your SO! <br>
 Requires Python 2.7.13 - https://www.python.org/downloads/release/python-2713/
 <br>
+<br>
 
 ## Usage
 Change the Access-Token parameter in the config file with your access-token from YNAB. You can get this from: https://app.youneedabudget.com/settings/developer
 <br>
 
 In all of your desired budgets, create a Tracking account named Delta, and add the note ```Shared_Delta``` <br>
-In your shared categories, add the note ```<!>Shared_ID: XX<!>```, where XX is a unique ID. Match the ID with the corresponding category on your other budgets. <br>
+In your shared categories, add the note ```<!>Shared_ID: XX<!>```, where XX is a unique ID. Match the ID with the corresponding category on your other budgets. 
+<br>
+<br>
 
 #### Example
 Make sure to match the category name with the ID. For example: 
@@ -18,8 +21,9 @@ Run the script once to create an initial cache. The script will tell you if you 
 
 You may run it manually and it will parse every new transaction from when since it was last ran, but the suggested method is to create an automation rule for it to run every 5-10 minutes if you're on linux (Crontab). I may get around to setup a server for it at some point, then all you'd need to do is authenticate and add the notes as described above. <br>
 
-Optionally you can also speed-up the script by whitelisting budgets, either by name or ID as explained in the Config file. <br>
-
+Optionally you can also speed-up the script by whitelisting budgets, either by name or ID as explained in the Config file. 
+<br>
+<br>
 
 ## Transaction example: 
 > Budget A spends -100$ in Groceries, in the account Visa <br>
@@ -30,6 +34,7 @@ If there are more than 2 accounts the share will be distributed evenly. For exam
 
 The delta will then display the differences in spending, or what the recievers Budget owes the source Budget.
 This way you'll still be able to how much you have left to budget, regardless if you've received your share.
+<br>
 <br>
 
 ## Configuration file/options
@@ -50,11 +55,11 @@ This way you'll still be able to how much you have left to budget, regardless if
 ```X-Rate-Treshold``` (Default: 20) Since the script communicates with the YNAB server multiple times each execution, a buffer is required to make sure we have enough "X-Rates" to finish the script. <br>
 <br>
 
-```Verbose-File-Output = 1``` (Default: 1) Sets the log level (YNAB.log) to verbose (Everything) if 1. <br>
-```Verbose-Stream-Output = 0``` (Default: 0) Sets the log level for the script to Verbose if 1. <br>
-```Enable-File-Log = 1``` (Default: 1) Enables the use of YNAB.log <br>
+```Verbose-File-Output``` (Default: 1) Sets the log level (YNAB.log) to verbose (Everything) if 1. <br>
+```Verbose-Stream-Output``` (Default: 0) Sets the log level for the script to Verbose if 1. <br>
+```Enable-File-Log``` (Default: 1) Enables the use of YNAB.log 
 <br>
-
+<br>
 
 ## Setup on a Raspberry Pi
 ###### Getting the script
@@ -68,6 +73,7 @@ EDIT: I haven't tested this in awhile after I've made some changes, hopefully it
 7. Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm.<br>
 8. Run the script again to create initial caches. <br>
 Now everytime you run the script it will check for new transactions and send them to every shared account.<br>
+<br>
 
 ###### Automate the script
 We can use crontab to automatically run the script <br>
@@ -76,10 +82,11 @@ We can use crontab to automatically run the script <br>
 ```*/10 * * * * cd /home/pi/python_scripts/YNAB-Shared-Categories/ && python /home/pi/python_scripts/YNAB-Shared-Categories/YNAB_Shared_Categories.py```<br>
 - The */10 tells it to run every 10 minutes, you can change this if you want.<br>
 - Exit with 'Ctrl+X' and hit 'Y' and then 'Enter' to confirm<br>
+<br>
 
 ###### Update the git
 To update the git simply go enter the directory ```cd python_scripts/YNAB-Shared-Categories/``` and run: ```sudo git pull```<br>
-
+<br>
 
 ## Disclaimer
 Keep in mind this application does NOT work retroactively and only handles new transactions, and ignores everything before its first run. So this will work with already established budgets :).
