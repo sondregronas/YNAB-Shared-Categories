@@ -907,7 +907,6 @@ def createConfig(path):
 # Config
 # Creates a config file if it doesn't exist
 if not os.path.exists('YNAB_Shared_Categories.cfg'):
-        logger.info('[INITIALIZE] Creating YNAB_Shared_Categories.cfg')
         createConfig('YNAB_Shared_Categories.cfg')
         sys.exit('YNAB_Shared_Categories.cfg was created. Add your Access Token to this file')
 
