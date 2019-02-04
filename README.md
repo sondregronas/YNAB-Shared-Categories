@@ -21,24 +21,6 @@ You may run it manually and it will parse every new transaction from when since 
 Optionally you can also speed-up the script by whitelisting budgets, either by name or ID as explained in the Config file. <br>
 
 
-## Configuration file/options
-```Access-Token``` - Your YNAB Access Token(s), separate the tokens with a comma if using separate YNAB accounts <br>
-
-```Account-Syntax``` (Default: Shared_Delta) The string that needs to be added to every shared budget, in a Delta account. <br>
-```Category-Syntax``` (Default: Shared_ID:) The string before an ID, within a categorys memo, in a Shared category. <br>
-```Category-Affix``` (Default: <!>) A string that needs to be wrapped around the Category-Syntax + ID on both ends. <br>
-
-```Whitelisted-Budgets``` (Default: blank) Separate budget ID's/Names by a comma. The script will only check the whitelisted budgets for updates. Checks all if blank. <br>
-```Detect-Deleted``` (Default: 1) Will adjust for deleted transactions if selected (Parses a negative amount). Recommended to leave on 1. <br>
-```Handle-Edits``` (Default: 1) Checks for edits within a transaction (edited amount, changed category, etc). Recommended to leave on 1. <br>
-```Automatic-Approval``` (Default: 1) If this is set to 1, every transaction in a Delta account will be 'Approved' automatically <br>
-
-```X-Rate-Treshold``` (Default: 20) Since the script communicates with the YNAB server multiple times each execution, a buffer is required to make sure we have enough "X-Rates" to finish the script. <br>
-
-```Verbose-File-Output = 1``` (Default: 1) Sets the log level (YNAB.log) to verbose (Everything) if 1. <br>
-```Verbose-Stream-Output = 0``` (Default: 0) Sets the log level for the script to Verbose if 1. <br>
-```Enable-File-Log = 1``` (Default: 1) Enables the use of YNAB.log <br>
-
 ## Transaction example: 
 > Budget A spends -100$ in Groceries, in the account Visa <br>
 > Budget B receives a transaction of -100$ in Groceries, in the account Delta <br>
@@ -48,6 +30,30 @@ If there are more than 2 accounts the share will be distributed evenly. For exam
 
 The delta will then display the differences in spending, or what the recievers Budget owes the source Budget.
 This way you'll still be able to how much you have left to budget, regardless if you've received your share.
+<br>
+
+## Configuration file/options
+```Access-Token``` - Your YNAB Access Token(s), separate the tokens with a comma if using separate YNAB accounts <br>
+<br>
+
+```Account-Syntax``` (Default: Shared_Delta) The string that needs to be added to every shared budget, in a Delta account. <br>
+```Category-Syntax``` (Default: Shared_ID:) The string before an ID, within a categorys memo, in a Shared category. <br>
+```Category-Affix``` (Default: <!>) A string that needs to be wrapped around the Category-Syntax + ID on both ends. <br>
+<br>
+
+```Whitelisted-Budgets``` (Default: blank) Separate budget ID's/Names by a comma. The script will only check the whitelisted budgets for updates. Checks all if blank. <br>
+```Detect-Deleted``` (Default: 1) Will adjust for deleted transactions if selected (Parses a negative amount). Recommended to leave on 1. <br>
+```Handle-Edits``` (Default: 1) Checks for edits within a transaction (edited amount, changed category, etc). Recommended to leave on 1. <br>
+```Automatic-Approval``` (Default: 1) If this is set to 1, every transaction in a Delta account will be 'Approved' automatically <br>
+<br>
+
+```X-Rate-Treshold``` (Default: 20) Since the script communicates with the YNAB server multiple times each execution, a buffer is required to make sure we have enough "X-Rates" to finish the script. <br>
+<br>
+
+```Verbose-File-Output = 1``` (Default: 1) Sets the log level (YNAB.log) to verbose (Everything) if 1. <br>
+```Verbose-Stream-Output = 0``` (Default: 0) Sets the log level for the script to Verbose if 1. <br>
+```Enable-File-Log = 1``` (Default: 1) Enables the use of YNAB.log <br>
+<br>
 
 
 ## Setup on a Raspberry Pi
