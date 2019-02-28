@@ -664,7 +664,7 @@ def checkTransaction(item, key='transactions'):
                 'deleted':sub['deleted'],
                 'date':item['date'],
                 'account_id':item['account_id'],
-                'memo':sub['memo'] + ' (Split)'
+                'memo':'(Split Transaction)'
             })
             try:
                 output.extend(checkTransaction(x, key='subtransactions'))
@@ -939,6 +939,7 @@ logger = YNABLog()
 logger.verbose(logger.filelog, config.getboolean('Debug', 'Verbose-File-Output'))
 logger.verbose(logger.streamlog, config.getboolean('Debug', 'Verbose-Stream-Output'))
 logger.enable(config.getboolean('Debug', 'Enable-File-Log'))
+
 
 def main():
     global errors
